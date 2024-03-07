@@ -43,20 +43,15 @@ bool HGCalSlinkFromRawSource::setRunAndEventInfo(edm::EventID& id,
   rawData_ = std::make_unique<FEDRawDataCollection>();
   metaData_ = std::make_unique<HGCalTestSystemMetaData>();
 
-  auto copyToFEDRawData = [](FEDRawDataCollection& rawData,
-                             const hgcal_slinkfromraw::RecordRunning* rEvent,
-                             unsigned fedId) {
-    constexpr size_t word_size = sizeof(uint64_t) / sizeof(char);
-    auto& fed_data = rawData.FEDData(fedId);
-    fed_data.resize((rEvent->payloadLength() - 1) * word_size);  // last word (0xdeadbeefdeadbeef) can be disregarded
-    auto payload = rEvent->payload();
-    auto fed_data_ptr = fed_data.data();
-    for (uint16_t i = 0; i < rEvent->payloadLength() - 1; ++i) {
-      uint64_t word = ((payload[i] & 0xffffffff) << 32) | payload[i] >> 32;
-      memcpy(fed_data_ptr, (const char*)(&word), word_size);
-      fed_data_ptr += word_size;
-    }
-  };
+  auto copyToFEDRawData =
+      [](FEDRawDataCollection& rawData, const hgcal_slinkfromraw::RecordRunning* rEvent, unsigned fedId) {
+        using T = FEDRawData::Data::value_type;
+        const auto size = sizeof(uint64_t) / sizeof(T) *
+                          (rEvent->payloadLength() - 1);  // last word (0xdeadbeefdeadbeef) can be discarded
+        auto& fed_data = rawData.FEDData(fedId);
+        fed_data.resize(size);
+        memcpy(fed_data.data(), reinterpret_cast<const T*>(rEvent->payload()), size);
+      };
 
   uint64_t eventId_ = 0;
   uint16_t bxId_ = 0;
