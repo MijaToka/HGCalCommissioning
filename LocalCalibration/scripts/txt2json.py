@@ -28,7 +28,9 @@ rename_dict = { # rename keys
   'BXm1_offset': 'BXm1_ped', # slope/offset columns were switched
 }
 default_dict = {
-  'Gain':        2,
+  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
+  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/interface/HGCalCalibrationParameterSoA.h
+  #'Gain':        2,
   'ADC_ped':     91., # Pedestal
   'CM_slope':    0.25,
   'CM_ped':      91., # CM_offset
