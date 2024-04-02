@@ -12,4 +12,5 @@ A brief description of the sub-directories is made in the following table
 | Sub-directory    | Contents |
 | -------- | ------- |
 | SystemTestEventFilters  | Event filters to convert system test data to raw DIGIs |
+| LocalCalibration  | Analysis scripts to produce level-0 calibration quantities/cond files |
 | | |
