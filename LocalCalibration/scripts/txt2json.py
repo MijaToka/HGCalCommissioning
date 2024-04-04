@@ -7,6 +7,7 @@
 #   https://github.com/CMS-HGCAL/cmssw/blob/hgcal-condformat-HGCalNANO-13_2_0_pre2_gain/CalibCalorimetry/HGCalPlugins/test/hgcal_yamlconfig_writer.py
 import os
 import json
+from datetime import datetime
 from HGCalCommissioning.LocalCalibration.JSONEncoder import CompactJSONEncoder
 
 # DEFAULTS
@@ -44,7 +45,8 @@ default_dict = {
   'TOT_P1':      1.0125,
   'TOT_P2':      0.0037,
   'TOAtops':     24.41,
-  'Valid':       1,
+  'MIPS_scale':  1.,
+  'Valid':       1, # "integer boolean": 0 or 1
 }
 
 
@@ -65,18 +67,26 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,verb=0):
   - Parameter keys are renamed using rename_dict so they can be parsed in CMSSW.
     https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
   """
+  
+  # FILENAME OUT defaults
   if outfname==None:
     outfname = os.path.basename(infname).replace('.txt','.json')
   if outdir!=None:
     outfname = os.path.join(outdir,os.path.basename(outfname))
+  
+  # DATA DICT to be written to JSON
+  #data_dict = { 'Module': [ ] } # column key -> array values
+  data_dict = { } # module type code -> column key -> array values
+  #data_dict['Metadata'] = { # meta data for self-documentation
+  #  'date': datetime.now().strftime("%d/%m/%Y, %H:%M:%S"),
+  #  'txt': [infname],
+  #}
   
   # READ TXT FILE and convert to DICT
   print(f">>> txt2json: Reading {green(infname)}...")
   imod = -1 # current module
   module = None # current module
   keys_dict = { } # column index -> column key
-  #data_dict = { 'Module': [ ] } # column key -> array values
-  data_dict = { } # module type code -> column key -> array values
   with open(infname,'r') as infile:
     for irow, line in enumerate(infile):
       if maxrows>=1 and irow>maxrows:
