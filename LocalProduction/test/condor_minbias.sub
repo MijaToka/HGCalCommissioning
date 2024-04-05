@@ -1,0 +1,17 @@
+cmssw       = /afs/cern.ch/user/p/psilva/work/HGCal/TOTIssue/CMSSW_14_1_0_pre1/src
+eosdir      = /eos/cms/store/group/dpg_hgcal/comm_hgcal/Production/
+executable  = runLocalGeneration.sh
+arguments   = -c $(cmssw) -m $(mcmfrag) -n $(nevts) -s $(simonly) -o $(transfer_output_files)
+output      = $(ClusterId).out
+error       = $(ClusterId).err
+log         = $(ClusterId).log
+output_destination = root://eosuser.cern.ch/$(eosdir)/$(dataset)/
+MY.XRDCP_CREATE_DIR = True
+transfer_output_files   = Events_$(ProcId).root
++JobFlavour = "tomorrow"
++AccountingGroup = "group_u_CMST3.all"
+MY.WantOS   = "el9"
+
+queue 200 dataset mcmfrag nevts simonly from (
+      MinBias_TuneCP5_14TeV-pythia8_CMSSW_14_1_0_pre1_Extended2026D99 EGM-Run3Summer19GS-00020 2500 1
+)

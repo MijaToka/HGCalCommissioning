@@ -1,0 +1,18 @@
+cmssw       = /afs/cern.ch/user/p/psilva/work/HGCal/BEstudies/CMSSW_13_0_0_pre4/src
+eosdir      = /eos/cms/store/cmst3/group/hgcal/CMG_studies/Production/
+executable  = runLocalGeneration.sh
+arguments   = -c $(cmssw) -m $(mcmfrag) -n $(nevts) -s $(simonly) -o $(eosdir)/$(dataset)/Events_$(ProcId).root -b diphotonEEBias -a $(aged)
+output      = $(ClusterId).out
+error       = $(ClusterId).err
+log         = $(ClusterId).log
+transfer_output_files   = ""
++JobFlavour = "tomorrow"
++AccountingGroup = "group_u_CMST3.all"
+MY.WantOS   = "el8"
+
+queue 20 dataset mcmfrag nevts simonly aged from (
+      PhotonFlatPt10to500GeV_Endcap_startup_CMSSW_13_0_0_pre4_Extended2026D99 DPGAnalysis/HGCalTools/python/PhotonFlatPt10to500GeV_Endcap.py 2000 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setRealisticStartupNoise
+      PhotonFlatPt10to500GeV_Endcap_aged_CMSSW_13_0_0_pre4_Extended2026D99 DPGAnalysis/HGCalTools/python/PhotonFlatPt10to500GeV_Endcap.py 2000 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setEndOfLifeNoise
+      H125ToGG_pythia8_Endcap_startup_CMSSW_13_0_0_pre4_Extended2026D99 DPGAnalysis/HGCalTools/python/H125ToGG_pythia8_cfi.py 2000 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setRealisticStartupNoise
+      H125ToGG_pythia8_Endcap_aged_CMSSW_13_0_0_pre4_Extended2026D99 DPGAnalysis/HGCalTools/python/H125ToGG_pythia8_cfi 2000 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setEndOfLifeNoise
+) 
