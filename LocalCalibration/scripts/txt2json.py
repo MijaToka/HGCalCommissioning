@@ -28,15 +28,19 @@ rename_dict = { # rename keys
   'CM_offset':   'CM_slope', # slope/offset columns were switched
   'BXm1_offset': 'BXm1_ped', # slope/offset columns were switched
 }
+gainkeys = [ # gain-dependent keys
+  'ADC_ped', 'ADCtofC', 'CM_slope', 'CM_ped', 'BXm1_slope', 'BXm1_ped'
+]
 default_dict = {
   # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
   # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/interface/HGCalCalibrationParameterSoA.h
   #'Gain':        2,
-  'ADC_ped':     91., # Pedestal
-  'CM_slope':    0.25,
-  'CM_ped':      91., # CM_offset
+  'ADC_ped':     91.,  # Pedestal
+  'Noise':       2.0,
+  'CM_slope':    0.25, # (rho ?)
+  'CM_ped':      91.,  # CM_offset (cm ?)
   'BXm1_slope':  0.,
-  'BXm1_ped':    91., # redundant, unused !
+  'BXm1_ped':    91.,  # redundant, unused !
   'ADCtofC':     0.19,
   'TOTtofC':     2.47,
   'TOT_ped':     9.,
@@ -52,7 +56,7 @@ default_dict = {
 
 def green(string,**kwargs):
   return "\033[32m%s\033[0m"%string
-
+  
 
 def readfeather(infname,data_dict=None,maxrows=-1,verb=0):
   """Read & parse feather file into a dictionary."""
@@ -64,7 +68,7 @@ def readfeather(infname,data_dict=None,maxrows=-1,verb=0):
   return data_dict, keys_dict
 
 
-def readtxt(infname,data_dict=None,maxrows=-1,verb=0):
+def readtxt(infname,data_dict=None,maxrows=-1,igain=-1,verb=0):
   """Read & parse txt file into a dictionary."""
   keys_dict = { } # column index -> column key
   if data_dict==None:
@@ -107,7 +111,7 @@ def readtxt(infname,data_dict=None,maxrows=-1,verb=0):
                       f" typecode={oldmod!r} -> {module!r}")
               if module in data_dict:
                 print(f">>> readtxt:  WARNING! Overwriting data for module {module!r} !!!")
-              data_dict[module] = { k: [ ] for k in keys_dict.values() }
+              data_dict[module] = { k: ([[],[],[]] if k in gainkeys else [ ] ) for k in keys_dict.values() }
             if verb>=2:
               print(f">>> readtxt:  Converting {oldval!r} -> {val!r}")
           elif key in ['Gain','Valid']: # convert to integer
@@ -115,17 +119,30 @@ def readtxt(infname,data_dict=None,maxrows=-1,verb=0):
           elif key not in ['Module']: # convert to float
             val = float(val)
           #print(data_dict)
-          data_dict[module][key].append(val)
+          if key in gainkeys: # gain-dependent parameter: list of lists with values
+            if igain>=0: # add value only to list at index igain
+              data_dict[module][key][igain].append(val) # add to list at index igain
+            else: # add placeholders to all lists
+              data_dict[module][key][0].append(val) # add to gain=1 ( 80fC)
+              data_dict[module][key][1].append(val) # add to gain=2 (160fC)
+              data_dict[module][key][2].append(val) # add to gain=4 (320fC)
+          else: # gain-independent parameter: list of values
+            data_dict[module][key].append(val)
         #data_dict['Module'].append(modnames[max(imod,0)])
   print(f">>> readtxt:  Found {len(data_dict)} modules: {', '.join(data_dict.keys())}...")
   return data_dict, keys_dict
-
+  
 
 def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0):
   """Convert txt file with calibration parameters to JSON. Basic structure:
   {
     typecode: {
-      parameter: [ values ]
+      parameter: [ values ] # gain-independent (Channel, TOT_*, TOAtops, MIPS_scale)
+      parameter: [   # gain-dependent (ADC_ped, ADCtofC, CM_slope, CM_ped, BXm1_slope, BXm1_ped)
+        [ values ],  # index=0, gain=1, charge= 80 fC
+        [ values ],  # index=1, gain=2, charge=160 fC
+        [ values ],  # index=2, gain=4, charge=320 fC
+      ]
     }
   }
   Note:
@@ -147,10 +164,10 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0)
   # DATA DICT to be written to JSON
   #data_dict = { 'Module': [ ] } # column key -> array values
   data_dict = { } # module type code -> column key -> array values
-  #data_dict['Metadata'] = { # meta data for self-documentation
-  #  'date': datetime.now().strftime("%d/%m/%Y, %H:%M:%S"),
-  #  'txt': [infname],
-  #}
+  ###data_dict['Metadata'] = { # meta data for self-documentation
+  ###  'date': datetime.now().strftime("Created %d/%m/%Y, %H:%M:%S"),
+  ###  'source': [infname],
+  ###}
   
   # READ & PARSE INPUT FILE
   print(f">>> txt2json: Reading {green(infname)}...")
@@ -160,15 +177,25 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0)
     data_dict, keys_dict = readtxt(infname,data_dict,verb=verb)
   
   # LOOP over MODULES
+  key0 = 'Channel' #keys_dict[0]
   for module in data_dict:
     print(f">>> txt2json: Checking module {module!r}...")
-    nrows = len(data_dict[module][keys_dict[0]])
+    if '-' not in module: continue # skip metadata
+    nrows = len(data_dict[module][key0])
     
     # SANITY CHECK
     for key in data_dict[module]:
-      nrows_ = len(data_dict[module][key])
-      if nrows!=nrows_:
-        print(f">>> txt2json: WARNING! Columns appear to have different number of rows!!! {keys_dict[0]!r} has {nrows}, {key!r} has {nrows_}")
+      nrowsset = [ ]
+      if key in gainkeys: # gain-dependent parameter: list of lists with values
+        assert len(data_dict[module][key])==3, f"len(data_dict[{module!r}][{key!r}])={len(data_dict[module][key])} must be 3!"
+        for i in [0,1,2]:
+          nrows_ = len(data_dict[module][key][i])
+          if nrows!=nrows_:
+            print(f">>> txt2json: WARNING! Columns appear to have different number of rows!!! {key0!r} has {nrows}, {key!r} has {nrows_} for igain={i}")
+      else: # gain-independent parameter: list of values
+        nrows_ = len(data_dict[module][key])
+        if nrows!=nrows_:
+          print(f">>> txt2json: WARNING! Columns appear to have different number of rows!!! {key0!r} has {nrows}, {key!r} has {nrows_}")
     
     # FILL MISSING COLUMNS with default values
     print(f">>> txt2json:   Found {len(data_dict[module])} columns with {nrows} rows: {', '.join(data_dict[module].keys())}")
@@ -177,7 +204,15 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0)
         default_val = default_dict[key]
         if verb>=1:
           print(f">>> txt2json:   Adding array of length {nrows} for {key} with default value {default_val}")
-        data_dict[module][key] = [default_val]*nrows # same length as others
+        if key in gainkeys:
+          data_dict[module][key] = [
+            [default_val]*nrows, # index=0, gain=1, charge= 80 fC
+            [default_val]*nrows, # index=1, gain=2, charge=160 fC
+            [default_val]*nrows  # index=2, gain=4, charge=320 fC
+          ]
+        else:
+          data_dict[module][key] = [default_val]*nrows
+           # same length as others
   
   # WRITE JSON file
   print(f">>> txt2json: Writing {outfname}...")
