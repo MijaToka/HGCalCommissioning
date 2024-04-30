@@ -54,7 +54,7 @@ def main():
     #fill plots for every column in the dataframe and save to ROOT file
     fOut=ROOT.TFile.Open(args.output,'RECREATE')
     for c in df.columns:
-        if c=='channel' : continue
+        if c.lower()=='channel' : continue
         ch_values=df[c].to_dict()
         h=fillHexPlot(ch_values=ch_values,moduletype=args.moduletype)
         fOut.cd()
