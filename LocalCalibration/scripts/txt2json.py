@@ -29,7 +29,7 @@ rename_dict = { # rename keys
   'BXm1_offset': 'BXm1_ped', # slope/offset columns were switched
 }
 gainkeys = [ # gain-dependent keys
-  'ADC_ped', 'ADCtofC', 'CM_slope', 'CM_ped', 'BXm1_slope', 'BXm1_ped'
+  'ADC_ped', 'ADCtofC', 'Noise', 'CM_slope', 'CM_ped', 'BXm1_slope', 'BXm1_ped'
 ]
 default_dict = {
   # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_0_pre0/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
@@ -138,7 +138,7 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0)
   {
     typecode: {
       parameter: [ values ] # gain-independent (Channel, TOT_*, TOAtops, MIPS_scale)
-      parameter: [   # gain-dependent (ADC_ped, ADCtofC, CM_slope, CM_ped, BXm1_slope, BXm1_ped)
+      parameter: [   # gain-dependent (ADC_ped, ADCtofC, Noise, CM_slope, CM_ped, BXm1_slope, BXm1_ped)
         [ values ],  # index=0, gain=1, charge= 80 fC
         [ values ],  # index=1, gain=2, charge=160 fC
         [ values ],  # index=2, gain=4, charge=320 fC
