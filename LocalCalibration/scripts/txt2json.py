@@ -18,7 +18,7 @@ modnames = [ # module typecodes
   'ML-F3PT-TX-0003', # DQM v0
   'ML-F3PC-MX-0003', # DQM v1
   'ML-F3PC-MX-0004', # DQM v2
-  'ML_F2WX-IH-0011', # DQM v3
+  'ML-F2WX-IH-0011', # DQM v3
   'ML-F3PT-TX-0001', # DQM v4
   'ML-F3PT-TX-0002', # DQM v5
 ]
