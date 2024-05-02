@@ -46,8 +46,7 @@ bool HGCalSlinkFromRawSource::setRunAndEventInfo(edm::EventID& id,
   auto copyToFEDRawData =
       [](FEDRawDataCollection& rawData, const hgcal_slinkfromraw::RecordRunning* rEvent, unsigned fedId) {
         using T = FEDRawData::Data::value_type;
-        const auto size = sizeof(uint64_t) / sizeof(T) *
-                          (rEvent->payloadLength() - 1);  // last word (0xdeadbeefdeadbeef) can be discarded
+        const auto size = sizeof(uint64_t) / sizeof(T) * (rEvent->payloadLength());
         auto& fed_data = rawData.FEDData(fedId);
         fed_data.resize(size);
         memcpy(fed_data.data(), reinterpret_cast<const T*>(rEvent->payload()), size);

@@ -24,9 +24,6 @@ namespace hgcal_slinkfromraw {
       // For information
       FileContinuationEof=0xee,
       FileContinuationBof=0xbb,
-
-      SlinkHeader=0xaa,
-      SlinkTrailer=0x55
     };
 
     RecordHeader() {
