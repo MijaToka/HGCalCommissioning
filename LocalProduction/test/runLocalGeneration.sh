@@ -91,7 +91,7 @@ else
         echo "MCM fragment file already exists, using available"
     else
         echo "This is a MCM fragment, getting it from the webserver"
-        curl -s -k https://cms-pdmv.cern.ch/mcm/public/restapi/requests/get_fragment/${mcmfragment} --retry 3 --create-dirs -o ${cfg}
+        curl -s -k https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_fragment/${mcmfragment} --retry 3 --create-dirs -o ${cfg}
         [ -s ${cfg} ] || exit $?;
     fi
 fi
