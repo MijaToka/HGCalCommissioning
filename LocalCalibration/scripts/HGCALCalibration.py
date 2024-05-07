@@ -1,8 +1,8 @@
 import pandas as pd
 import glob
-class HGCALBase():
+class HGCALCalibration():
     
-    #Constructor of HGCALBase class
+    #Constructor of HGCALCalibration class
     def __init__ (self):
         pass
     

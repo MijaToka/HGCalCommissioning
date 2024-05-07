@@ -1,4 +1,4 @@
-from HGCALBase import HGCALBase
+from HGCALCalibration import HGCALCalibration
 #import PedestalCorrectionsMaker
 import ROOT
 import os
@@ -8,7 +8,7 @@ import itertools
 import json
 from HGCalCommissioning.LocalCalibration.JSONEncoder import CompactJSONEncoder
 
-class HGCALPedestals(HGCALBase):
+class HGCALPedestals(HGCALCalibration):
         #methods
     def analyse(self):
         pass
