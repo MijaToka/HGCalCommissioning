@@ -1,0 +1,4 @@
+#!/bin/bash
+
+make dumpyaml || exit 1
+./dumpyaml $@
