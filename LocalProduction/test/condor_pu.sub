@@ -15,7 +15,10 @@ transfer_output_files   = Events_$(ProcId).root
 MY.WantOS    = "el9"
 
 queue 100 dataset mcmfrag nevts simonly aged from (
-      TTbar_TuneCP5_14TeV-pythia8_PU200_startup_CMSSW_14_1_0_pre1_Extended2026D99 TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setRealisticStartupNoise
-      TTbar_TuneCP5_14TeV-pythia8_PU200_aged_CMSSW_14_1_0_pre1_Extended2026D99 TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setEndOfLifeNoise
+      TTbar_TuneCP5_14TeV-pythia8_PU200_startup_fixedareasn_CMSSW_14_1_0_pre1_Extended2026D99  TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry.HGCalSimProducers.hgcalDigitizer_cfi.HGCal_setRealisticStartupNoise_fixedSiPMTileAreasAndSN
+      TTbar_TuneCP5_14TeV-pythia8_PU200_startup_nofluence_CMSSW_14_1_0_pre1_Extended2026D99  TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry.HGCalSimProducers.hgcalDigitizer_cfi.HGCal_ignoreFluence
+      TTbar_TuneCP5_14TeV-pythia8_PU200_startup_nonoise_CMSSW_14_1_0_pre1_Extended2026D99  TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry.HGCalSimProducers.hgcalDigitizer_cfi.HGCal_ignoreNoise
+      #TTbar_TuneCP5_14TeV-pythia8_PU200_startup_CMSSW_14_1_0_pre1_Extended2026D99 TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setRealisticStartupNoise
+      #TTbar_TuneCP5_14TeV-pythia8_PU200_aged_CMSSW_14_1_0_pre1_Extended2026D99 TTbar_14TeV_TuneCP5_Pythia8 100 0 SimCalorimetry/HGCalSimProducers/hgcalDigitizer_cfi.HGCal_setEndOfLifeNoise
 ) 
 
