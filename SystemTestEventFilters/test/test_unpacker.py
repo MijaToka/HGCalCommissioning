@@ -71,10 +71,10 @@ process.rawDataCollector = cms.EDAlias(
 )
 
 # logical mapping
-process.load('Geometry.HGCalMapping.hgCalMappingIndexESSource_cfi')
-process.hgCalMappingIndexESSource.modules = cms.FileInPath(options.modules)
-process.hgCalMappingIndexESSource.si = cms.FileInPath(options.sicells)
-process.hgCalMappingIndexESSource.sipm = cms.FileInPath(options.sipmcells)
+process.load('Geometry.HGCalMapping.hgCalMappingESProducer_cfi')
+process.hgCalMappingESProducer.modules = cms.FileInPath(options.modules)
+process.hgCalMappingESProducer.si = cms.FileInPath(options.sicells)
+process.hgCalMappingESProducer.sipm = cms.FileInPath(options.sipmcells)
 
 process.load('Configuration.StandardSequences.Accelerators_cff')
 process.hgCalMappingModuleESProducer = cms.ESProducer('hgcal::HGCalMappingModuleESProducer@alpaka',
