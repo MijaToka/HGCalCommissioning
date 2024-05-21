@@ -141,13 +141,14 @@ process.hgCalMappingCellESProducer = cms.ESProducer('hgcal::HGCalMappingCellESPr
 process.hgcalConfigESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
   'hgcalrechit::HGCalConfigurationESProducer@alpaka',
   gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration
-  charMode=cms.int32(1),
-  moduleIndexerSource=cms.ESInputTag('')
+  #charMode=cms.int32(1),
+  indexSource=cms.ESInputTag('')
 )
 process.hgcalCalibESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
   'hgcalrechit::HGCalCalibrationESProducer@alpaka',
   filename=cms.string(options.params), # to be set up in configTBConditions
-  moduleIndexerSource=cms.ESInputTag('')
+  indexSource=cms.ESInputTag(''),
+  configSource=cms.ESInputTag(''), #('hgcalConfigESProducer', ''),
 )
 
 # RAW -> DIGI producer
@@ -179,7 +180,7 @@ if options.gpu:
 else:
   process.hgcalRecHit = cms.EDProducer(
     'alpaka_serial_sync::HGCalRecHitProducer',
-    digis=cms.InputTag('hgcalDigis', '', 'TEST'),
+    digis=cms.InputTag('hgcalDigis', '', 'TEST'), #cms.InputTag('hgcalDigis', '', 'TEST'),
     calibSource=cms.ESInputTag(''), #('hgcalCalibESProducer', ''),
     configSource=cms.ESInputTag(''), #('hgcalConfigESProducer', ''),
     n_hits_scale=cms.int32(1),
@@ -192,8 +193,8 @@ else:
 process.p = cms.Path(
   #*process.hgCalEmptyEventFilter       # FILTER empty events
   process.hgcalDigis                    # RAW -> DIGI
-  #*process.hgcalRecHit                 # DIGI -> RECO (RecHit calibrations)
-  #*process.hgCalRecHitsFromSoAproducer # RECO -> NANO Phase I format translator
+  *process.hgcalRecHit                  # DIGI -> RECO (RecHit calibrations)
+  #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
 )
 
 process.outpath = cms.EndPath()
