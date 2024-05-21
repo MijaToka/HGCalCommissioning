@@ -19,10 +19,6 @@ options.register('inputFiles',
 options.register('inputTrigFiles',
                  '/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link0_File0000000001.bin',
                  VarParsing.multiplicity.list, VarParsing.varType.string, "input Trigger link file")
-options.register('dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "also dump the FEDRawData content")
-options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "also store the RAW output into a streamer file")
 # geometry options:
 options.register('geometry', 'Extended2026D94', VarParsing.multiplicity.singleton, VarParsing.varType.string, 'geometry to use')
 options.register('modules',"",mytype=VarParsing.varType.string,
@@ -47,6 +43,16 @@ options.register('params',"",mytype=VarParsing.varType.string,
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
+# output options:
+options.register(
+    'dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+    "also dump the FEDRawData content")
+options.register(
+    'storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+    "also store the RAW output into a streamer file")
+options.register(
+    'storeOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+    "also store the output into an EDM file")
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
@@ -54,14 +60,15 @@ options.parseArguments()
 
 # DEFAULTS
 if not options.params:
+  import os
   outdir = os.path.join(os.environ.get('CMSSW_BASE',''),"src/HGCalCommissioning/LocalCalibration/data")
   #options.params = f"{outdir}/calibration_parameters_v2.json"
   options.params = f"{outdir}/level0_calib_params.json"
 if not options.modules:
   # git clone https://github.com/pfs/Geometry-HGCalMapping.git $CMSSW_BASE/src/Geometry/HGCalMapping/data
   # TODO: move to https://gitlab.cern.ch/hgcal-dpg/hgcal-comm
-  #options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt" # test beam
-  options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules
+  # options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt" # test beam
+  options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules
 print(f">>> fedIds:       {options.fedId!r}")
 print(f">>> Input files:  {options.inputFiles!r}")
 print(f">>> Module map:   {options.modules!r}")
@@ -96,13 +103,18 @@ process.options.wantSummary = cms.untracked.bool(True)
 #print(">>> Prepare inputs...")
 process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEvents))
 process.source = cms.Source(
-  "HGCalSlinkFromRawSource",
-  fedIds=cms.untracked.vuint32(*options.fedId),
-  inputs=cms.untracked.vstring(*options.inputFiles),
-  trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
-  firstRun=cms.untracked.uint32(options.runNumber),
-  firstLuminosityBlockForEachRun=cms.untracked.VLuminosityBlockID(cms.LuminosityBlockID(1, 0)),
-  fileNames=cms.untracked.vstring(*options.inputFiles),
+    "HGCalSlinkFromRawSource",
+    fedIds=cms.untracked.vuint32(*options.fedId),
+    inputs=cms.untracked.vstring(*options.inputFiles),
+    trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
+    firstRun=cms.untracked.uint32(options.runNumber),
+    firstLuminosityBlockForEachRun=cms.untracked.VLuminosityBlockID(cms.LuminosityBlockID(1, 0)),
+    fileNames=cms.untracked.vstring(*options.inputFiles),
+)
+process.rawDataCollector = cms.EDAlias(
+    source=cms.VPSet(
+        cms.PSet(type=cms.string('FEDRawDataCollection'))
+    )
 )
 
 # GEOMETRY & INDEXING
@@ -114,9 +126,16 @@ process.hgCalMappingESProducer.modules = cms.FileInPath(options.modules)
 process.hgCalMappingESProducer.si = cms.FileInPath(options.sicells)
 process.hgCalMappingESProducer.sipm = cms.FileInPath(options.sipmcells)
 
+process.load('Configuration.StandardSequences.Accelerators_cff')
+process.hgCalMappingModuleESProducer = cms.ESProducer('hgcal::HGCalMappingModuleESProducer@alpaka',
+                                                      filename=cms.FileInPath(options.modules),
+                                                      moduleindexer=cms.ESInputTag(''))
+process.hgCalMappingCellESProducer = cms.ESProducer('hgcal::HGCalMappingCellESProducer@alpaka',
+                                                    filelist=cms.vstring(options.sicells, options.sipmcells),
+                                                    cellindexer=cms.ESInputTag(''))
+
 # CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
 #print(">>> Prepare calibrations & configuration...")
-process.load('Configuration.StandardSequences.Accelerators_cff')
 #process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
 #process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
 process.hgcalConfigESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
@@ -134,15 +153,9 @@ process.hgcalCalibESProducer = cms.ESProducer( # ESProducer to load calibration 
 # RAW -> DIGI producer
 #print(">>> Prepare RAW -> DIGI...")
 process.load('EventFilter.HGCalRawToDigi.hgcalDigis_cfi')
-process.hgcalDigis.src = cms.InputTag('HGCalSlinkFromRawSource', 'hgcalFEDRawData')
-#process.hgcalDigis.src = cms.InputTag('source')
+process.hgcalDigis.src = cms.InputTag('rawDataCollector')
 process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
-process.hgcalDigis.configSource = cms.ESInputTag('')  # for HGCalConfigESSourceFromYAML
-process.hgcalDigis.moduleInfoSource = cms.ESInputTag('')  # for HGCalModuleInfoESSource
-process.hgcalDigis.slinkBOE = cms.uint32(options.slinkBOE) # TODO: Izaak move to config
-#process.hgcalDigis.cbHeaderMarker = cms.uint32(options.cbHeaderMarker) # TODO: ask Huilin, Izaak move to config
-process.hgcalDigis.econdHeaderMarker = cms.uint32(options.econdHeaderMarker) # TODO: Izaak move to config
-process.hgcalDigis.bePassTrough = options.bePassTrough # TODO: Izaak move to config
+# process.hgcalDigis.configSource = cms.ESInputTag('')  # for HGCalConfigESSourceFromYAML  # TODO: put this back once implemented
 
 ## FILTER empty events
 #process.load('EventFilter.HGCalRawToDigi.hgCalEmptyEventFilter_cfi')
@@ -151,7 +164,6 @@ process.hgcalDigis.bePassTrough = options.bePassTrough # TODO: Izaak move to con
 
 # DIGI -> RECO producer
 #print(">>> Prepare DIGI -> RECO...")
-process.load('Configuration.StandardSequences.Accelerators_cff')
 process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
 process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
 if options.gpu:
@@ -184,26 +196,33 @@ process.p = cms.Path(
   #*process.hgCalRecHitsFromSoAproducer # RECO -> NANO Phase I format translator
 )
 
-# DUMP FED
-if options.dumpFRD:
-  #print(">>> Adding dumpFRD...")
-  process.dump = cms.EDAnalyzer(
-    "DumpFEDRawDataProduct",
-    #label=cms.untracked.InputTag('source'),
-    label=cms.untracked.InputTag('HGCalSlinkFromRawSource', 'hgcalFEDRawData'),
-    feds=cms.untracked.vint32(*options.fedId),
-    dumpPayload=cms.untracked.bool(True)
-  )
-  process.p *= process.dump
-
-# OUTPUT
 process.outpath = cms.EndPath()
+
+if options.storeOutput:
+    process.output = cms.OutputModule("PoolOutputModule",
+                                      fileName=cms.untracked.string(options.output),
+                                      outputCommands=cms.untracked.vstring(
+                                          'drop *',
+                                          'keep *_hgcalDigis_*_*',
+                                          #   'keep *_hgcalRecHit_*_*',
+                                      ),
+                                      #   SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
+                                      )
+    process.outpath += process.output
+
+if options.dumpFRD:
+    process.dump = cms.EDAnalyzer("DumpFEDRawDataProduct",
+                                  label=cms.untracked.InputTag('rawDataCollector'),
+                                  feds=cms.untracked.vint32(*options.fedId),
+                                  dumpPayload=cms.untracked.bool(True)
+                                  )
+    process.p *= process.dump
+
 if options.storeRAWOutput:
-  process.outputRAW = cms.OutputModule(
-    "FRDOutputModule",
-    fileName=cms.untracked.string(options.output),
-    source=cms.InputTag('source'),
-    frdVersion=cms.untracked.uint32(6),
-    frdFileVersion=cms.untracked.uint32(1),
-  )
-  process.outpath += process.outputRAW
+    process.outputRAW = cms.OutputModule("FRDOutputModule",
+                                         fileName=cms.untracked.string(options.output),
+                                         source=cms.InputTag('rawDataCollector'),
+                                         frdVersion=cms.untracked.uint32(6),
+                                         frdFileVersion=cms.untracked.uint32(1),
+                                         )
+    process.outpath += process.outputRAW
