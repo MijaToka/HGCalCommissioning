@@ -19,7 +19,7 @@ options.register(
     VarParsing.multiplicity.list, VarParsing.varType.string, "input Trigger link file")
 # configs
 options.register(
-    'modules', 'Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt', mytype=VarParsing.varType.string,
+    'modules', 'HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt', mytype=VarParsing.varType.string,
     info="Path to module mapper. Absolute, or relative to CMSSW src directory")
 options.register(
     'sicells', 'Geometry/HGCalMapping/data/CellMaps/WaferCellMapTraces.txt', mytype=VarParsing.varType.string,
@@ -112,10 +112,7 @@ if options.storeOutput:
                                       fileName=cms.untracked.string(options.output),
                                       outputCommands=cms.untracked.vstring(
                                           'drop *',
-                                          #   'keep *_hgcalEmulatedSlinkRawData_*_*',
                                           'keep *_hgcalDigis_*_*',
-                                          #   'keep *_hgcalRecHit_*_*',
-                                          #   'keep *_hgCalRecHitsFromSoAproducer_*_*',
                                       ),
                                       #   SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
                                       )
