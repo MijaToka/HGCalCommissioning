@@ -78,7 +78,7 @@ print(f">>> Calib params: {options.params!r}")
 
 # PROCESS
 from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2
-process = cms.Process('TestHGCalRecHitESProducers',Era_Phase2)
+process = cms.Process('RAW2RECO',Era_Phase2)
 
 # GLOBAL TAG
 from Configuration.AlCa.GlobalTag import GlobalTag
@@ -126,6 +126,8 @@ process.hgCalMappingESProducer.modules = cms.FileInPath(options.modules)
 process.hgCalMappingESProducer.si = cms.FileInPath(options.sicells)
 process.hgCalMappingESProducer.sipm = cms.FileInPath(options.sipmcells)
 
+
+# MAPPING ESProducers
 process.load('Configuration.StandardSequences.Accelerators_cff')
 process.hgCalMappingModuleESProducer = cms.ESProducer('hgcal::HGCalMappingModuleESProducer@alpaka',
                                                       filename=cms.FileInPath(options.modules),
@@ -142,21 +144,23 @@ process.hgcalConfigESProducer = cms.ESProducer( # ESProducer to load configurati
   'hgcalrechit::HGCalConfigurationESProducer@alpaka',
   gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration
   #charMode=cms.int32(1),
-  indexSource=cms.ESInputTag('')
+  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
 )
 process.hgcalCalibESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
   'hgcalrechit::HGCalCalibrationESProducer@alpaka',
   filename=cms.string(options.params), # to be set up in configTBConditions
-  indexSource=cms.ESInputTag(''),
-  configSource=cms.ESInputTag(''), #('hgcalConfigESProducer', ''),
+  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
+  configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
 )
+#process.hgcalCalibESProducer.indexSource = process.hgcalConfigESProducer.indexSource
 
 # RAW -> DIGI producer
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/EventFilter/HGCalRawToDigi/plugins/HGCalRawToDigi.cc
 #print(">>> Prepare RAW -> DIGI...")
 process.load('EventFilter.HGCalRawToDigi.hgcalDigis_cfi')
 process.hgcalDigis.src = cms.InputTag('rawDataCollector')
 process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
-# process.hgcalDigis.configSource = cms.ESInputTag('')  # for HGCalConfigESSourceFromYAML  # TODO: put this back once implemented
+#process.hgcalDigis.configSource = cms.ESInputTag('')  # for HGCalConfigESSourceFromYAML  # TODO: put this back once implemented
 
 ## FILTER empty events
 #process.load('EventFilter.HGCalRawToDigi.hgCalEmptyEventFilter_cfi')
@@ -164,15 +168,16 @@ process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
 #process.hgCalEmptyEventFilter.fedIds = process.hgcalDigis.fedIds
 
 # DIGI -> RECO producer
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitProducer.cc
 #print(">>> Prepare DIGI -> RECO...")
 process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
 process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
 if options.gpu:
   process.hgcalRecHit = cms.EDProducer(
     'alpaka_cuda_async::HGCalRecHitProducer',
-    digis=cms.InputTag('hgcalDigis', '', 'TEST'),
-    calibSource=cms.ESInputTag(''), #('hgcalCalibESProducer', ''),
-    configSource=cms.ESInputTag(''), #('hgcalConfigESProducer', ''),
+    digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+    calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
+    configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
     n_hits_scale=cms.int32(1),
     n_blocks=cms.int32(4096),
     n_threads=cms.int32(1024)
@@ -180,9 +185,9 @@ if options.gpu:
 else:
   process.hgcalRecHit = cms.EDProducer(
     'alpaka_serial_sync::HGCalRecHitProducer',
-    digis=cms.InputTag('hgcalDigis', '', 'TEST'), #cms.InputTag('hgcalDigis', '', 'TEST'),
-    calibSource=cms.ESInputTag(''), #('hgcalCalibESProducer', ''),
-    configSource=cms.ESInputTag(''), #('hgcalConfigESProducer', ''),
+    digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+    calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
+    configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
     n_hits_scale=cms.int32(1),
     n_blocks=cms.int32(1024),
     n_threads=cms.int32(4096)
@@ -200,30 +205,33 @@ process.p = cms.Path(
 process.outpath = cms.EndPath()
 
 if options.storeOutput:
-    process.output = cms.OutputModule("PoolOutputModule",
-                                      fileName=cms.untracked.string(options.output),
-                                      outputCommands=cms.untracked.vstring(
-                                          'drop *',
-                                          'keep *_hgcalDigis_*_*',
-                                          #   'keep *_hgcalRecHit_*_*',
-                                      ),
-                                      #   SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
-                                      )
+    process.output = cms.OutputModule(
+      "PoolOutputModule",
+      fileName=cms.untracked.string(options.output),
+      outputCommands=cms.untracked.vstring(
+          'drop *',
+          'keep *_hgcalDigis_*_*',
+          #'keep *_hgcalRecHit_*_*',
+      ),
+      #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
+    )
     process.outpath += process.output
 
 if options.dumpFRD:
-    process.dump = cms.EDAnalyzer("DumpFEDRawDataProduct",
-                                  label=cms.untracked.InputTag('rawDataCollector'),
-                                  feds=cms.untracked.vint32(*options.fedId),
-                                  dumpPayload=cms.untracked.bool(True)
-                                  )
+    process.dump = cms.EDAnalyzer(
+      "DumpFEDRawDataProduct",
+      label=cms.untracked.InputTag('rawDataCollector'),
+      feds=cms.untracked.vint32(*options.fedId),
+      dumpPayload=cms.untracked.bool(True)
+    )
     process.p *= process.dump
 
 if options.storeRAWOutput:
-    process.outputRAW = cms.OutputModule("FRDOutputModule",
-                                         fileName=cms.untracked.string(options.output),
-                                         source=cms.InputTag('rawDataCollector'),
-                                         frdVersion=cms.untracked.uint32(6),
-                                         frdFileVersion=cms.untracked.uint32(1),
-                                         )
+    process.outputRAW = cms.OutputModule(
+      "FRDOutputModule",
+      fileName=cms.untracked.string(options.output),
+      source=cms.InputTag('rawDataCollector'),
+      frdVersion=cms.untracked.uint32(6),
+      frdFileVersion=cms.untracked.uint32(1),
+    )
     process.outpath += process.outputRAW
