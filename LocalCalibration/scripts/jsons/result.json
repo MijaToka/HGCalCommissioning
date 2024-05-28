@@ -1,0 +1,8 @@
+// python3 yaml2json.py --conf /eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/calibration_module815/calib_withOct2022/80fC/80fC_inj_lowgain_loop_module815_beamtest/injection_scan/run_20230412_160226/initial_full_config.yaml --run /eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/calibration_module815/calib_withOct2022/80fC/80fC_inj_lowgain_loop_module815_beamtest/injection_scan/run_20230412_160226/injection_scan138.yaml --out jsons/result.json
+{
+  "ML-XXXX-YY-NNNN": {
+    "Gain": [260, 260, 260, 260, 260, 260], // 260 is 0100000100: [0100](Cf: 4) - [00](Cf_comp: 0) - [0100](Rf: 4)
+    "characMode": 1,
+    "CalibrationSC": [1, 1, 1, 1, 1, 1]
+  } // [roc_0_half_0, roc_0_half_1, roc_1_half_0, roc_1_half_1, roc_2_half_0, roc_2_half_1] <- this convention for the 6-element lists
+}
