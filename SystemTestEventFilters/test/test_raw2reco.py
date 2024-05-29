@@ -168,13 +168,13 @@ process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
 #process.hgCalEmptyEventFilter.fedIds = process.hgcalDigis.fedIds
 
 # DIGI -> RECO producer
-# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitProducer.cc
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
 #print(">>> Prepare DIGI -> RECO...")
 process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
 process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
 if options.gpu:
-  process.hgcalRecHit = cms.EDProducer(
-    'alpaka_cuda_async::HGCalRecHitProducer',
+  process.hgcalRecHits = cms.EDProducer(
+    'alpaka_cuda_async::HGCalRecHitsProducer',
     digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
     calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
     configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
@@ -183,8 +183,8 @@ if options.gpu:
     n_threads=cms.int32(1024)
   )
 else:
-  process.hgcalRecHit = cms.EDProducer(
-    'alpaka_serial_sync::HGCalRecHitProducer',
+  process.hgcalRecHits = cms.EDProducer(
+    'alpaka_serial_sync::HGCalRecHitsProducer',
     digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
     calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
     configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
@@ -198,7 +198,7 @@ else:
 process.p = cms.Path(
   #*process.hgCalEmptyEventFilter       # FILTER empty events
   process.hgcalDigis                    # RAW -> DIGI
-  *process.hgcalRecHit                  # DIGI -> RECO (RecHit calibrations)
+  *process.hgcalRecHits                  # DIGI -> RECO (RecHit calibrations)
   #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
 )
 
@@ -211,7 +211,7 @@ if options.storeOutput:
       outputCommands=cms.untracked.vstring(
           'drop *',
           'keep *_hgcalDigis_*_*',
-          #'keep *_hgcalRecHit_*_*',
+          'keep *_hgcalRecHits_*_*',
       ),
       #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
     )
