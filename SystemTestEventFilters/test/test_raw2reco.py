@@ -210,8 +210,8 @@ if options.storeOutput:
       fileName=cms.untracked.string(options.output),
       outputCommands=cms.untracked.vstring(
           'drop *',
-          'keep *_hgcalDigis_*_*',
-          'keep *_hgcalRecHits_*_*',
+          'keep *SoA*_hgcalDigis_*_*',
+          'keep *SoA*_hgcalRecHits_*_*',
       ),
       #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
     )
