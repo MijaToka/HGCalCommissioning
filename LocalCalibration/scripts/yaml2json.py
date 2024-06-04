@@ -11,13 +11,22 @@ def pprint(d):
     str_json = re.sub(r"(?<=\[)[^\[\]]+(?=])", repl_func, str_json)
     return str_json
 
+def index_gain(gain):
+    mapping = { 260 : 1, 293 : 2, 572 : 4 };
+    # 260 = 0100000100: [0100](Cf: 4) - [00](Cf_comp: 0) - [0100](Rf: 4) => 80 Cf
+    # 293 = 0100100101: [0100](Cf: 4) - [10](Cf_comp: 2) - [0101](Rf: 5) => 160 Cf
+    # 572 = 1000111100: [1000](Cf: 8) - [11](Cf_comp: 3) - [1100](Rf: 12) => 320 Cf
+    if gain not in mapping:
+        print(f"error: gain %d not found" % gain)
+        return -1
+    return mapping[gain]
     
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf', required=True, help='config yaml')
     parser.add_argument('--run', required=True, help='run scan yaml')
-    parser.add_argument('--out', required=True, help='output json')
+    parser.add_argument('--out', help='output json')
     args = parser.parse_args()
     file_conf = args.conf
     file_run = args.run
@@ -40,6 +49,7 @@ if __name__ == '__main__':
             t_gain = f'{jg["Cf"]:04b}{jg["Cf_comp"]:02b}{jg["Rf"]:04b}'
             # print(t_gain)
             gain = int(t_gain, 2)
+            gain = index_gain(gain)
             Gain.append(gain)
 
         i_DigitalHalf = data_conf[f"roc_s%d"%i]["sc"]["DigitalHalf"]
@@ -52,7 +62,9 @@ if __name__ == '__main__':
     result["ML-XXXX-YY-NNNN"] = { "Gain": Gain, "characMode" : characMode, "CalibrationSC" : CalibrationSC }
 
     str_result = pprint(result)
-    
-    with open(file_out, 'w') as f:
-        print(str_result, file=f)
+    print(str_result)
+
+    if file_out:
+        with open(file_out, 'w') as f:
+            print(str_result, file=f)
 
