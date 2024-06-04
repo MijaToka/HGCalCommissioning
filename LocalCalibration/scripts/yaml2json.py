@@ -11,6 +11,10 @@ def pprint(d):
     str_json = re.sub(r"(?<=\[)[^\[\]]+(?=])", repl_func, str_json)
     return str_json
 
+def revive_hex(str_json):
+    str_json = re.sub(r'"headerMarker":\s+([0-9])', r'"headerMarker": 0x\1', str_json)
+    return str_json
+    
 def index_gain(gain):
     mapping = { 260 : 1, 293 : 2, 572 : 4 };
     # 260 = 0100000100: [0100](Cf: 4) - [00](Cf_comp: 0) - [0100](Rf: 4) => 80 Cf
@@ -47,7 +51,6 @@ if __name__ == '__main__':
         for jg in i_GlobalAnalog.values():
             # print(f'{jg["Cf"]}{jg["Cf_comp"]}{jg["Rf"]}')
             t_gain = f'{jg["Cf"]:04b}{jg["Cf_comp"]:02b}{jg["Rf"]:04b}'
-            # print(t_gain)
             gain = int(t_gain, 2)
             gain = index_gain(gain)
             Gain.append(gain)
@@ -59,12 +62,15 @@ if __name__ == '__main__':
     characMode = data_run["metaData"]["characMode"]
 
     result = {}
-    result["ML-XXXX-YY-NNNN"] = { "Gain": Gain, "characMode" : characMode, "CalibrationSC" : CalibrationSC }
+    result["ML-F3PT-TX-0003"] = { "headerMarker": 154, "Gain": Gain, "characMode" : characMode, "CalibrationSC" : CalibrationSC }
+    result["ML-F3PC-MX-0003"] = { "headerMarker": 154, "Gain": Gain, "characMode" : characMode, "CalibrationSC" : CalibrationSC }
 
     str_result = pprint(result)
+    str_result = revive_hex(str_result)
+
     print(str_result)
 
     if file_out:
-        with open(file_out, 'w') as f:
+        with open(file_out, 'w') as f:            
             print(str_result, file=f)
 
