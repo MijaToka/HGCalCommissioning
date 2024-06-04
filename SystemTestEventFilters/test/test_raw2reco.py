@@ -5,6 +5,10 @@
 #   https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/SystemTestEventFilters/test/test_slink_source.py
 import FWCore.ParameterSet.Config as cms
 
+# DEFAULT
+import os
+datadir = os.path.join(os.environ.get('CMSSW_BASE',''),"src/HGCalCommissioning/LocalCalibration/data")
+
 # USER OPTIONS
 from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
@@ -27,19 +31,23 @@ options.register('sicells','Geometry/HGCalMapping/data/CellMaps/WaferCellMapTrac
                  info="Path to Si cell mapper. Absolute, or relative to CMSSW src directory")
 options.register('sipmcells','Geometry/HGCalMapping/data/CellMaps/channels_sipmontile.hgcal.txt',mytype=VarParsing.varType.string,
                  info="Path to SiPM-on-tile cell mapper. Absolute, or relative to CMSSW src directory")
-# RAW -> DIGI options:
+# unpacker / RAW -> DIGI options:
 options.register('mode', 'trivial', VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "type of emulation")
-options.register('slinkBOE', 0x2a, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Begin of event marker for S-link")
+options.register('slinkHeaderMarker', 0x2a, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Override begin of event marker for S-link")
 options.register('cbHeaderMarker', 0x5f, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Begin of event marker for BE/capture block")
+                 "Override begin of event marker for BE/capture block")
 options.register('econdHeaderMarker', 0x154, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Begin of event marker for ECON-D")
-options.register('bePassTrough', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "Ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
+                 "Override begin of event marker for ECON-D")
+options.register('mismatchPassthrough', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
 # module calibration & configurations:
-options.register('params',"",mytype=VarParsing.varType.string,
+options.register('config',f"{datadir}/HGCalCommissioning/LocalCalibration/data/config_feds.json",
+                 mytype=VarParsing.varType.string,
+                 info="Path to calibration parameters (JSON format)")
+options.register('params',f"{datadir}/level0_calib_params.json",
+                 mytype=VarParsing.varType.string,
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
@@ -59,11 +67,6 @@ options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.v
 options.parseArguments()
 
 # DEFAULTS
-if not options.params:
-  import os
-  outdir = os.path.join(os.environ.get('CMSSW_BASE',''),"src/HGCalCommissioning/LocalCalibration/data")
-  #options.params = f"{outdir}/calibration_parameters_v2.json"
-  options.params = f"{outdir}/level0_calib_params.json"
 if not options.modules:
   # git clone https://github.com/pfs/Geometry-HGCalMapping.git $CMSSW_BASE/src/Geometry/HGCalMapping/data
   # TODO: move to https://gitlab.cern.ch/hgcal-dpg/hgcal-comm
@@ -103,18 +106,18 @@ process.options.wantSummary = cms.untracked.bool(True)
 #print(">>> Prepare inputs...")
 process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEvents))
 process.source = cms.Source(
-    "HGCalSlinkFromRawSource",
-    fedIds=cms.untracked.vuint32(*options.fedId),
-    inputs=cms.untracked.vstring(*options.inputFiles),
-    trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
-    firstRun=cms.untracked.uint32(options.runNumber),
-    firstLuminosityBlockForEachRun=cms.untracked.VLuminosityBlockID(cms.LuminosityBlockID(1, 0)),
-    fileNames=cms.untracked.vstring(*options.inputFiles),
+  "HGCalSlinkFromRawSource",
+  fedIds=cms.untracked.vuint32(*options.fedId),
+  inputs=cms.untracked.vstring(*options.inputFiles),
+  trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
+  firstRun=cms.untracked.uint32(options.runNumber),
+  firstLuminosityBlockForEachRun=cms.untracked.VLuminosityBlockID(cms.LuminosityBlockID(1, 0)),
+  fileNames=cms.untracked.vstring(*options.inputFiles),
 )
 process.rawDataCollector = cms.EDAlias(
-    source=cms.VPSet(
-        cms.PSet(type=cms.string('FEDRawDataCollection'))
-    )
+  source=cms.VPSet(
+    cms.PSet(type=cms.string('FEDRawDataCollection'))
+  )
 )
 
 # GEOMETRY & INDEXING
@@ -126,33 +129,48 @@ process.hgCalMappingESProducer.modules = cms.FileInPath(options.modules)
 process.hgCalMappingESProducer.si = cms.FileInPath(options.sicells)
 process.hgCalMappingESProducer.sipm = cms.FileInPath(options.sipmcells)
 
-
 # MAPPING ESProducers
 process.load('Configuration.StandardSequences.Accelerators_cff')
-process.hgCalMappingModuleESProducer = cms.ESProducer('hgcal::HGCalMappingModuleESProducer@alpaka',
-                                                      filename=cms.FileInPath(options.modules),
-                                                      moduleindexer=cms.ESInputTag(''))
-process.hgCalMappingCellESProducer = cms.ESProducer('hgcal::HGCalMappingCellESProducer@alpaka',
-                                                    filelist=cms.vstring(options.sicells, options.sipmcells),
-                                                    cellindexer=cms.ESInputTag(''))
+process.hgCalMappingModuleESProducer = cms.ESProducer(
+  'hgcal::HGCalMappingModuleESProducer@alpaka',
+  filename=cms.FileInPath(options.modules),
+  moduleindexer=cms.ESInputTag('')
+)
+process.hgCalMappingCellESProducer = cms.ESProducer(
+  'hgcal::HGCalMappingCellESProducer@alpaka',
+  filelist=cms.vstring(options.sicells, options.sipmcells),
+  cellindexer=cms.ESInputTag('')
+)
+
+# GLOBAL HGCAL CONFIGURATION (for unpacker)
+process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
+  'HGCalConfigurationESProducer',
+  #filename=cms.string(options.config),
+  passthroughMode=cms.int32(options.mismatchPassthrough), # ignore mismatch
+  cbHeaderMarker=cms.int32(options.cbHeaderMarker), # capture block
+  slinkHeaderMarker=cms.int32(options.slinkHeaderMarker),
+  econdHeaderMarker=cms.int32(options.econdHeaderMarker),
+  charMode=cms.int32(1),
+  indexSource=cms.ESInputTag('hgCalMappingESProducer','')
+)
 
 # CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
 #print(">>> Prepare calibrations & configuration...")
 #process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
 #process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
-process.hgcalConfigESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
+process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
   'hgcalrechit::HGCalConfigurationESProducer@alpaka',
   gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration
   #charMode=cms.int32(1),
   indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
 )
-process.hgcalCalibESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
+process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
   'hgcalrechit::HGCalCalibrationESProducer@alpaka',
   filename=cms.string(options.params), # to be set up in configTBConditions
   indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
-  configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
+  configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
 )
-#process.hgcalCalibESProducer.indexSource = process.hgcalConfigESProducer.indexSource
+#process.hgcalCalibParamESProducer.indexSource = process.hgcalConfigESProducer.indexSource
 
 # RAW -> DIGI producer
 # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/EventFilter/HGCalRawToDigi/plugins/HGCalRawToDigi.cc
@@ -160,7 +178,7 @@ process.hgcalCalibESProducer = cms.ESProducer( # ESProducer to load calibration 
 process.load('EventFilter.HGCalRawToDigi.hgcalDigis_cfi')
 process.hgcalDigis.src = cms.InputTag('rawDataCollector')
 process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
-#process.hgcalDigis.configSource = cms.ESInputTag('')  # for HGCalConfigESSourceFromYAML  # TODO: put this back once implemented
+#process.hgcalDigis.configSource = cms.ESInputTag('hgcalConfigESProducer', '') # TODO: put this back once implemented
 
 ## FILTER empty events
 #process.load('EventFilter.HGCalRawToDigi.hgCalEmptyEventFilter_cfi')
@@ -176,8 +194,8 @@ if options.gpu:
   process.hgcalRecHits = cms.EDProducer(
     'alpaka_cuda_async::HGCalRecHitsProducer',
     digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
-    calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
-    configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
+    calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
+    configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
     n_hits_scale=cms.int32(1),
     n_blocks=cms.int32(4096),
     n_threads=cms.int32(1024)
@@ -186,8 +204,8 @@ else:
   process.hgcalRecHits = cms.EDProducer(
     'alpaka_serial_sync::HGCalRecHitsProducer',
     digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
-    calibSource=cms.ESInputTag('hgcalCalibESProducer', ''),
-    configSource=cms.ESInputTag('hgcalConfigESProducer', ''),
+    calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
+    configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
     n_hits_scale=cms.int32(1),
     n_blocks=cms.int32(1024),
     n_threads=cms.int32(4096)
@@ -198,40 +216,40 @@ else:
 process.p = cms.Path(
   #*process.hgCalEmptyEventFilter       # FILTER empty events
   process.hgcalDigis                    # RAW -> DIGI
-  *process.hgcalRecHits                  # DIGI -> RECO (RecHit calibrations)
+  *process.hgcalRecHits                 # DIGI -> RECO (RecHit calibrations)
   #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
 )
 
 process.outpath = cms.EndPath()
 
 if options.storeOutput:
-    process.output = cms.OutputModule(
-      "PoolOutputModule",
-      fileName=cms.untracked.string(options.output),
-      outputCommands=cms.untracked.vstring(
-          'drop *',
-          'keep *SoA*_hgcalDigis_*_*',
-          'keep *SoA*_hgcalRecHits_*_*',
-      ),
-      #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
-    )
-    process.outpath += process.output
+  process.output = cms.OutputModule(
+    "PoolOutputModule",
+    fileName=cms.untracked.string(options.output),
+    outputCommands=cms.untracked.vstring(
+        'drop *',
+        'keep *SoA*_hgcalDigis_*_*',
+        'keep *SoA*_hgcalRecHits_*_*',
+    ),
+    #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
+  )
+  process.outpath += process.output
 
 if options.dumpFRD:
-    process.dump = cms.EDAnalyzer(
-      "DumpFEDRawDataProduct",
-      label=cms.untracked.InputTag('rawDataCollector'),
-      feds=cms.untracked.vint32(*options.fedId),
-      dumpPayload=cms.untracked.bool(True)
-    )
-    process.p *= process.dump
+  process.dump = cms.EDAnalyzer(
+    "DumpFEDRawDataProduct",
+    label=cms.untracked.InputTag('rawDataCollector'),
+    feds=cms.untracked.vint32(*options.fedId),
+    dumpPayload=cms.untracked.bool(True)
+  )
+  process.p *= process.dump
 
 if options.storeRAWOutput:
-    process.outputRAW = cms.OutputModule(
-      "FRDOutputModule",
-      fileName=cms.untracked.string(options.output),
-      source=cms.InputTag('rawDataCollector'),
-      frdVersion=cms.untracked.uint32(6),
-      frdFileVersion=cms.untracked.uint32(1),
-    )
-    process.outpath += process.outputRAW
+  process.outputRAW = cms.OutputModule(
+    "FRDOutputModule",
+    fileName=cms.untracked.string(options.output),
+    source=cms.InputTag('rawDataCollector'),
+    frdVersion=cms.untracked.uint32(6),
+    frdFileVersion=cms.untracked.uint32(1),
+  )
+  process.outpath += process.outputRAW
