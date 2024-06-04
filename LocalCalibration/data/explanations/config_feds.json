@@ -1,0 +1,9 @@
+// https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/CondFormats/HGCalObjects/interface/HGCalConfiguration.h#L17-L37
+{
+    0: { // FED 0
+        "mismatchPassthroughMode": 0,   // ignore ECON-D packet mismatches
+        "cbHeaderMarker": 0x5f,         // begin of event marker/identifier for capture block
+        "slinkHeaderMarker": 0x2a,      // begin of event marker/identifier for S-link
+        "econds": ["ML-F3PT-TX-0003", "ML-F3PC-MX-0003" ]
+    }
+}

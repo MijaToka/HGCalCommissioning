@@ -1,0 +1,15 @@
+// python3 yaml2json.py --conf /eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/calibration_module815/calib_withOct2022/80fC/80fC_inj_lowgain_loop_module815_beamtest/injection_scan/run_20230412_160226/initial_full_config.yaml --run /eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/calibration_module815/calib_withOct2022/80fC/80fC_inj_lowgain_loop_module815_beamtest/injection_scan/run_20230412_160226/injection_scan138.yaml --out ../data/config_econds.json
+{
+  "ML-F3PT-TX-0003": { // ECON-D type code ! do not know yet how to get module id from yamls
+    "headerMarker": 0x154, // begin of event marker/identifier for ECON-D
+    "Gain": [1, 1, 1, 1, 1, 1], // 1: 80 fC, 2: 160 fC, 4: 320 fC
+    "characMode": 1,
+    "CalibrationSC": [1, 1, 1, 1, 1, 1]
+  }, // [roc_0_half_0, roc_0_half_1, roc_1_half_0, roc_1_half_1, roc_2_half_0, roc_2_half_1] <- convention for the 6-element lists
+  "ML-F3PC-MX-0003": {
+    "headerMarker": 0x154,
+    "Gain": [1, 1, 1, 1, 1, 1],
+    "characMode": 1,
+    "CalibrationSC": [1, 1, 1, 1, 1, 1]
+  }
+}
