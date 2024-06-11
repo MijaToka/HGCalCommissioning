@@ -1,5 +1,5 @@
 # Instructions:
-#   cmsRun -j FrameworkJobReport_Run1695762407_Link2_File0000000001_RECO.xml $CMSSW_BASE/src/HGCalCommissioning/SystemTestEventFilters/test/test_raw2reco.py mode=slinkfromraw slinkBOE=0x55 cbHeaderMarker=0x7f econdHeaderMarker=0x154 bePassTrough=False inputFiles=/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link1_File0000000001.bin,/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link2_File0000000001.bin fedId=1,2 inputTrigFiles=/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link0_File0000000001.bin output=Run1695762407_Link2_File0000000001 runNumber=1695762407 maxEvents=1000000000
+#   cmsRun -j FrameworkJobReport_Run1695762407_Link2_File0000000001_RECO.xml $CMSSW_BASE/src/HGCalCommissioning/SystemTestEventFilters/test/test_raw2reco.py mode=slinkfromraw slinkHeaderMarker=0x55 cbHeaderMarker=0x7f econdHeaderMarker=0x154 mismatchPassthrough=False inputFiles=/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link1_File0000000001.bin,/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link2_File0000000001.bin fedId=1,2 inputTrigFiles=/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link0_File0000000001.bin output=Run1695762407_Link2_File0000000001 runNumber=1695762407 maxEvents=1000000000
 # Based on
 #   https://github.com/CMS-HGCAL/cmssw/blob/hgcal-condformat-HGCalNANO-13_2_0_pre3_linearity/EventFilter/HGCalRawToDigi/test/tb_raw2reco.py
 #   https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/SystemTestEventFilters/test/test_slink_source.py
@@ -34,33 +34,31 @@ options.register('sipmcells','Geometry/HGCalMapping/data/CellMaps/channels_sipmo
 # unpacker / RAW -> DIGI options:
 options.register('mode', 'trivial', VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "type of emulation")
-options.register('slinkHeaderMarker', 0x2a, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+options.register('slinkHeaderMarker', 0x55, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override begin of event marker for S-link")
-options.register('cbHeaderMarker', 0x5f, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+options.register('cbHeaderMarker', 0x7f, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override begin of event marker for BE/capture block")
 options.register('econdHeaderMarker', 0x154, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override begin of event marker for ECON-D")
 options.register('mismatchPassthrough', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
 # module calibration & configurations:
-options.register('config',f"{datadir}/HGCalCommissioning/LocalCalibration/data/config_feds.json",
-                 mytype=VarParsing.varType.string,
-                 info="Path to calibration parameters (JSON format)")
+options.register('fedconfig',f"{datadir}/config_feds.json",mytype=VarParsing.varType.string,
+                 info="Path to configuration (JSON format)")
+options.register('modconfig',f"{datadir}/config_econds.json",mytype=VarParsing.varType.string,
+                 info="Path to configuration (JSON format)")
 options.register('params',f"{datadir}/level0_calib_params.json",
                  mytype=VarParsing.varType.string,
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
 # output options:
-options.register(
-    'dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-    "also dump the FEDRawData content")
-options.register(
-    'storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-    "also store the RAW output into a streamer file")
-options.register(
-    'storeOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-    "also store the output into an EDM file")
+options.register('dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also dump the FEDRawData content")
+options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also store the RAW output into a streamer file")
+options.register('storeOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also store the output into an EDM file")
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
@@ -70,8 +68,10 @@ options.parseArguments()
 if not options.modules:
   # git clone https://github.com/pfs/Geometry-HGCalMapping.git $CMSSW_BASE/src/Geometry/HGCalMapping/data
   # TODO: move to https://gitlab.cern.ch/hgcal-dpg/hgcal-comm
-  # options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt" # test beam
-  options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules
+  #options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules
+  #options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt" # test beam with six modules
+  #options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules, fedId=49
+  options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # # only first two modules, fedId=0
 print(f">>> fedIds:       {options.fedId!r}")
 print(f">>> Input files:  {options.inputFiles!r}")
 print(f">>> Module map:   {options.modules!r}")
@@ -145,7 +145,8 @@ process.hgCalMappingCellESProducer = cms.ESProducer(
 # GLOBAL HGCAL CONFIGURATION (for unpacker)
 process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
   'HGCalConfigurationESProducer',
-  #filename=cms.string(options.config),
+  fedjson=cms.string(options.fedconfig), # JSON with FED configuration parameters
+  modjson=cms.string(options.modconfig), # JSON with ECON-D configuration parameters
   passthroughMode=cms.int32(options.mismatchPassthrough), # ignore mismatch
   cbHeaderMarker=cms.int32(options.cbHeaderMarker), # capture block
   slinkHeaderMarker=cms.int32(options.slinkHeaderMarker),

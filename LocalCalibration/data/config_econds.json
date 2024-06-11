@@ -1,12 +1,12 @@
 {
   "ML-F3PT-TX-0003": {
-    "headerMarker": 0x154,
+    "headerMarker": "0x154",
     "Gain": [1, 1, 1, 1, 1, 1],
     "characMode": 1,
     "CalibrationSC": [1, 1, 1, 1, 1, 1]
   },
   "ML-F3PC-MX-0003": {
-    "headerMarker": 0x154,
+    "headerMarker": "0x154",
     "Gain": [1, 1, 1, 1, 1, 1],
     "characMode": 1,
     "CalibrationSC": [1, 1, 1, 1, 1, 1]
