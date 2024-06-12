@@ -34,13 +34,13 @@ options.register('sipmcells','Geometry/HGCalMapping/data/CellMaps/channels_sipmo
 # unpacker / RAW -> DIGI options:
 options.register('mode', 'trivial', VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "type of emulation")
-options.register('slinkHeaderMarker', 0x55, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Override begin of event marker for S-link")
-options.register('cbHeaderMarker', 0x7f, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Override begin of event marker for BE/capture block")
-options.register('econdHeaderMarker', 0x154, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "Override begin of event marker for ECON-D")
-options.register('mismatchPassthrough', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+options.register('slinkHeaderMarker', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Override begin of event marker for S-link (e.g. 0x55)")
+options.register('cbHeaderMarker', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Override begin of event marker for BE/capture block (e.g. 0x7f)")
+options.register('econdHeaderMarker', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Override begin of event marker for ECON-D (e.g. 0x154)")
+options.register('mismatchPassthrough', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
 # module calibration & configurations:
 options.register('fedconfig',f"{datadir}/config_feds.json",mytype=VarParsing.varType.string,
