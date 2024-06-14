@@ -1,0 +1,9 @@
+<use name="FWCore/Framework"/>
+<use name="FWCore/ParameterSet"/>
+<use name="FWCore/PluginManager"/>
+<use name="DataFormats/NanoAOD"/>
+<use name="CondFormats/DataRecord"/>
+<use name="CondFormats/HGCalObjects"/>
+<library file="*.cc" name="HGCalCommissioningNanoToolsPlugins">
+  <flags EDM_PLUGIN="1"/>
+</library>
