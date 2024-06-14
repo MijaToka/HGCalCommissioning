@@ -30,101 +30,101 @@ namespace hgcal_slinkfromraw {
       reset();
     }
 
-    void reset(FsmState::State s=FsmState::EndOfStateEnum) {
+    inline void reset(FsmState::State s=FsmState::EndOfStateEnum) {
       _header=uint64_t(Pattern)<<56;
       setState(s);
     }
     
     // Get values
-    uint8_t pattern() const {
+    inline uint8_t pattern() const {
       return _header>>56;
     }
 
-    bool validPattern() const {
+    inline bool validPattern() const {
       return pattern()==Pattern;
     }
     
-    Identifier identifier() const {
+    inline Identifier identifier() const {
       return (Identifier)(_header>>56);
     }
-
-    FsmState::State state() const {
+    
+    inline FsmState::State state() const {
       return (FsmState::State)((_header>>48)&0x7f);
     }
   
-    bool validState() const {
+    inline bool validState() const {
       return state()<FsmState::EndOfStateEnum;
     }
     
-    uint16_t payloadLength() const {
+    inline uint16_t payloadLength() const {
       return (_header>>32)&0x0fff; // LIMIT TO 4k FOR NOW
     }
 
-    uint32_t totalLength() const {
+    inline uint32_t totalLength() const {
       return payloadLength()+1;
     }
 
-    uint32_t totalLengthInBytes() const {
+    inline uint32_t totalLengthInBytes() const {
       return sizeof(uint64_t)*(payloadLength()+1);
     }
 
-    uint32_t utc() const {
+    inline uint32_t utc() const {
       return _header&0xffffffff;
     }
 
-    std::string utcDate() const {
+    inline std::string utcDate() const {
       uint64_t t(utc());
       return ctime((time_t*)(&t));
     }
-
-    uint32_t sequenceCounter() const {
+    
+    inline uint32_t sequenceCounter() const {
       return _header&0xffffffff;
     }
     
-    static const std::string identifierName(Identifier i) {
+    inline static const std::string identifierName(Identifier i) {
       if(i==StateData        ) return "StateData        ";
       if(i==ConfigurationData) return "ConfigurationData";
       if(i==EventData        ) return "EventData        ";
-      return _unknown;
+      return FsmState::_unknown;
     }
 
-    const std::string identifierName() const {
+    inline const std::string identifierName() const {
       return identifierName(identifier());
     }
 
     // Set values
-    void setIdentifier(Identifier i) {
+    inline void setIdentifier(Identifier i) {
       _header&=0x00ffffffffffffff;
       _header|=(uint64_t(i)<<56);
     }
 
-    void setState(FsmState::State s) {
+    inline void setState(FsmState::State s) {
       _header&=0xff00ffffffffffff;
       _header|=(uint64_t(s)<<48);
       setIdentifier(StateData);
     }
 
-    void setPayloadLength(uint16_t l) {
+    inline void setPayloadLength(uint16_t l) {
       _header&=0xffff0000ffffffff;
       _header|=(uint64_t(l)<<32);
 
     }
 
-    void setUtc(uint32_t t=time(0)) {
+    inline void setUtc(uint32_t t=time(0)) {
       _header&=0xffffffff00000000;
       _header|=t;
     }
 
-    void setSequenceCounter(uint32_t c) {
+    inline void setSequenceCounter(uint32_t c) {
       _header&=0xffffffff00000000;
       _header|=c;
     }
 
-    bool operator==(const RecordHeader &h) const {
+    inline bool operator==(const RecordHeader &h) const {
       return _header==h._header;
     }
   
-    void print(std::ostream &o=std::cout, std::string s="") const {
+    inline void print(std::ostream &o=std::cout, std::string s="") const {
       o << s << "RecordHeader::print()  Data = 0x"
 	<< std::hex << std::setfill('0')
 	<< std::setw(16) << _header
@@ -154,20 +154,18 @@ namespace hgcal_slinkfromraw {
   
   private:
     uint64_t _header;
+    
+    inline static std::string _unknown{"Unknown"};
 
-    static const std::string _unknown;
-    //static const std::string _identifierNames[EndOfIdentifierEnum];
+    /*
+      static const std::string _identifierNames[EndOfIdentifierEnum];
+      const std::string RecordHeader::_identifierNames[EndOfIdentifierEnum]={
+      "StateData     ",
+      "ConfigurationData",
+      "EventData        "
+      };
+    */
   };
-
-  const std::string RecordHeader::_unknown="Unknown";
-  /*
-  const std::string RecordHeader::_identifierNames[EndOfIdentifierEnum]={
-    "StateData     ",
-    "ConfigurationData",
-    "EventData        "
-  };
-  */
-
 }
 
 #endif

@@ -15,52 +15,53 @@ namespace hgcal_slinkfromraw {
     RecordStarting() {
     }
     
-    bool valid() const {
+    inline bool valid() const {
       return validPattern() && state()==FsmState::Starting;
     }
     
-    void setHeader(uint32_t t=time(0)) {
+    inline void setHeader(uint32_t t=time(0)) {
       setState(FsmState::Starting);
       setPayloadLength(2);
       setUtc(t);
     }
 
-    uint32_t runNumber() const {
+    inline uint32_t runNumber() const {
       return _payload[0]&0xffffffff;
     }
-    uint32_t maxEvents() const {
+
+    inline uint32_t maxEvents() const {
       return _payload[0]>>32;
     }
 
-    uint32_t maxSeconds() const {
+    inline uint32_t maxSeconds() const {
       return _payload[1]&0xffffffff;
     }
 
-    uint32_t maxSpills() const {
+    inline uint32_t maxSpills() const {
       return _payload[1]>>32;
     }
 
-    void setRunNumber(uint32_t t=time(0)) {
+    inline void setRunNumber(uint32_t t=time(0)) {
       _payload[0]&=0xffffffff00000000;
       _payload[0]|=t;
     }
    
-    void setMaxEvents(uint32_t e) {
+    inline void setMaxEvents(uint32_t e) {
       _payload[0]&=0x00000000ffffffff;
       _payload[0]|=uint64_t(e)<<32;
     }
    
-    void setMaxSeconds(uint32_t s) {
+    inline void setMaxSeconds(uint32_t s) {
       _payload[1]&=0xffffffff00000000;
       _payload[1]|=s;
     }
    
-    void setMaxSpills(uint32_t s) {
+    inline void setMaxSpills(uint32_t s) {
       _payload[1]&=0x00000000ffffffff;
       _payload[1]|=uint64_t(s)<<32;
     }
    
-    void print(std::ostream &o=std::cout, std::string s="") const {
+    inline void print(std::ostream &o=std::cout, std::string s="") const {
       o << s << "RecordStarting::print()" << std::endl;
       RecordHeader::print(o,s+" ");
       

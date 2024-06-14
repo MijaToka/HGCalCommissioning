@@ -2,7 +2,7 @@
 #define HGCalCommissioning_SystemTestEventFilters_HGCalSlinkFileReader_h
 
 #include "HGCalTestSystemMetaData.h"
-#include "HGCalSlinkFromRaw/FileReader.h"
+#include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalSlinkFromRaw/FileReader.h"
 
 #include <vector>
 #include <string>

@@ -15,53 +15,53 @@ namespace hgcal_slinkfromraw {
     RecordContinuing() {
     }
     
-    void setHeader(uint32_t t=time(0)) {
+    inline void setHeader(uint32_t t=time(0)) {
       setState(FsmState::Continuing);
       setPayloadLength(2);
       setUtc(t);
     }
 
-    bool valid() const {
+    inline bool valid() const {
       return validPattern() && state()==FsmState::Continuing;
     }
     
-    uint32_t runNumber() const {
+    inline uint32_t runNumber() const {
       return _payload[0]&0xffffffff;
     }
     
-    uint32_t fileNumber() const {
+    inline uint32_t fileNumber() const {
       return _payload[0]>>32;
     }
 
-    uint32_t numberOfEvents() const {
+    inline uint32_t numberOfEvents() const {
       return _payload[1]&0xffffffff;
     }
 
-    uint32_t numberOfBytes() const {
+    inline uint32_t numberOfBytes() const {
       return _payload[1]>>32;
     }
 
-    void setRunNumber(uint32_t t=time(0)) {
+    inline void setRunNumber(uint32_t t=time(0)) {
       _payload[0]&=0xffffffff00000000;
       _payload[0]|=t;
     }
-   
-    void setFileNumber(uint32_t f) {
+    
+    inline void setFileNumber(uint32_t f) {
       _payload[0]&=0x00000000ffffffff;
       _payload[0]|=uint64_t(f)<<32;
     }
    
-    void setNumberOfEvents(uint32_t e) {
+    inline void setNumberOfEvents(uint32_t e) {
       _payload[1]&=0xffffffff00000000;
       _payload[1]|=e;
     }
    
-    void setNumberOfBytes(uint32_t b) {
+    inline void setNumberOfBytes(uint32_t b) {
       _payload[1]&=0x00000000ffffffff;
       _payload[1]|=uint64_t(b)<<32;
     }
    
-    void print(std::ostream &o=std::cout, std::string s="") const {
+    inline void print(std::ostream &o=std::cout, std::string s="") const {
       o << s << "RecordContinuing::print()" << std::endl;
       RecordHeader::print(o,s+" ");
       

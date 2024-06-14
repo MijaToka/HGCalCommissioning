@@ -16,8 +16,10 @@ namespace hgcal_slinkfromraw {
   
   class FileReader {
   public:
+
+    FileReader() {};
     
-    bool open(const std::string &f) {
+    inline bool open(const std::string &f) {
       _inputFile.open(f,std::ios::binary);
       _fileName = f;
       if (_inputFile.fail())
@@ -26,7 +28,7 @@ namespace hgcal_slinkfromraw {
       return (_inputFile?true:false);
     }
     
-    bool read(Record *h) {
+    inline bool read(Record *h) {
       _inputFile.read((char*)h,8);
       
       if(!_inputFile) return false; 
@@ -35,7 +37,7 @@ namespace hgcal_slinkfromraw {
       return true;
     }
     
-    bool close() {
+    inline bool close() {
       if(_inputFile.is_open()) {
 	edm::LogInfo("hgcal_slinkfromraw::FileReader::open") << 
 	  "FileReader::close() closing file " << _fileName;
@@ -44,7 +46,7 @@ namespace hgcal_slinkfromraw {
       return true;
     }
     
-    bool closed() {
+    inline bool closed() {
       return !_inputFile.is_open();
     }
     

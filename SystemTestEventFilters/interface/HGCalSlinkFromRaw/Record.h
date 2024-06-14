@@ -13,23 +13,23 @@ namespace hgcal_slinkfromraw {
       reset();
     }
     
-    const uint64_t* payload() const {
+    inline const uint64_t* payload() const {
       return (uint64_t*)(this+1);
     }
     
-    uint64_t* getPayload() {
+    inline uint64_t* getPayload() {
       return (uint64_t*)(this+1);
     }
 
-    void incrementPayloadLength(uint16_t l=1) {
+    inline void incrementPayloadLength(uint16_t l=1) {
       RecordHeader::setPayloadLength(payloadLength()+l);
     }
     
-    void deepCopy(const Record &r) {
+    inline void deepCopy(const Record &r) {
       std::memcpy(this,&r,8*r.totalLength());
     }
 
-    void deepCopy(const Record *r) {
+    inline void deepCopy(const Record *r) {
       deepCopy(*r);
     }
 
@@ -44,27 +44,27 @@ namespace hgcal_slinkfromraw {
       }
     }
 
-    unsigned maxNumberOfPayloadWords() const {
+    inline unsigned maxNumberOfPayloadWords() const {
       return NumberOfPayloadWords;
     }
     
-    void setPayloadLength() {
+    inline void setPayloadLength() {
       RecordHeader::setPayloadLength(NumberOfPayloadWords);
     }
 
-    void setPayloadLength(uint16_t l) {
+    inline void setPayloadLength(uint16_t l) {
       RecordHeader::setPayloadLength(l);
     }
     
-    const uint64_t* constPayload() {
+    inline const uint64_t* constPayload() {
       return _payload;
     }
 
-    uint64_t* payload() {
+    inline uint64_t* payload() {
       return _payload;
     }
 
-    void print(std::ostream &o=std::cout) const {
+    inline void print(std::ostream &o=std::cout) const {
       o << "Record::print()" << std::endl;
       RecordHeader::print(o," ");
       
@@ -76,7 +76,6 @@ namespace hgcal_slinkfromraw {
       }
     }
     
-
   protected:
     uint64_t _payload[NumberOfPayloadWords];
   private:
