@@ -21,15 +21,6 @@ def customise_elemapper(process) :
                                                           moduleindexer=cms.ESInputTag('') )
     return process
 
-def customize_nanoOutput(process):
-    process.NANOAODoutput.outputCommands +=  ["keep nanoaodFlatTable_*_*_*"]
-    process.NANOAODoutput.compressionAlgorithm = 'ZSTD'
-    process.NANOAODoutput.compressionLevel = 5
-    process.MessageLogger.cerr.FwkReport.reportEvery = 50000
-    process.options.wantSummary = True
-    return process
-
-
 #build NANO task
 hgcRunFEDReadoutTable = cms.EDProducer("HGCalRunFEDReadoutSequence")
 hgCalTB2023TableProducer = cms.EDProducer("HGCalTB2023TableProducer")
