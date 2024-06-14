@@ -19,66 +19,63 @@ namespace hgcal_slinkfromraw {
     }
 
     // Ensure has a 128-bit word structure
-    void setPayloadLength(uint16_t l) {
+    inline void setPayloadLength(uint16_t l) {
       if((l%2)==1) l++;
       RecordHeader::setPayloadLength(l);
     }
     
-    void setHeader(uint32_t t=time(0)) {
+    inline void setHeader(uint32_t t=time(0)) {
       setIdentifier(RecordHeader::EventData);
       setState(FsmState::Running);
       setPayloadLength(0);
       setUtc(t);
     }
 
-    bool valid() const {
+    inline bool valid() const {
       return validPattern() && state()==FsmState::Running;
     }
     
-    const SlinkBoe* slinkBoe() const {
+    inline const SlinkBoe* slinkBoe() const {
       return (SlinkBoe*)_payload;
     }
     
-    const uint32_t* daqPayload() const {
+    inline const uint32_t* daqPayload() const {
       return (payloadLength()==0?nullptr:(const uint32_t*)(_payload+2));
     }
     
-    const BePacketHeader* bePacketHeader() const {
+    inline const BePacketHeader* bePacketHeader() const {
       return (const BePacketHeader*)daqPayload();
     }
 
-    const uint32_t* econdPayload() const {
+    inline const uint32_t* econdPayload() const {
       return (payloadLength()==0?nullptr:(const uint32_t*)(_payload+3));
     }
     
-    
-    
-    const SlinkEoe* slinkEoe() const {
+    inline const SlinkEoe* slinkEoe() const {
       return (SlinkEoe*)(_payload+payloadLength()-2);
     }
     
-    SlinkBoe* getSlinkBoe() {
+    inline SlinkBoe* getSlinkBoe() {
       return (SlinkBoe*)_payload;
     }
     
-    uint32_t* getDaqPayload() {
+    inline uint32_t* getDaqPayload() {
       return (payloadLength()==0?nullptr:(uint32_t*)(_payload+2));
     }
     
-    BePacketHeader* getBePacketHeader() {
+    inline BePacketHeader* getBePacketHeader() {
       return (BePacketHeader*)daqPayload();
     }
 
-    uint32_t* getEcondPayload() {
-      
+    inline uint32_t* getEcondPayload() {
       return (payloadLength()==0?nullptr:(uint32_t*)(_payload+3));
     }
     
-    SlinkEoe* getSlinkEoe() {
+    inline SlinkEoe* getSlinkEoe() {
       return (SlinkEoe*)(_payload+payloadLength()-2);
     }
     
-    void print(std::ostream &o=std::cout, std::string s="") const {
+    inline void print(std::ostream &o=std::cout, std::string s="") const {
       o << s << "RecordRunning::print()" << std::endl;
       RecordHeader::print(o,s+" ");
            

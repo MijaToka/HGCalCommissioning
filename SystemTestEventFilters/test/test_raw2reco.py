@@ -13,8 +13,10 @@ datadir = os.path.join(os.environ.get('CMSSW_BASE',''),"src/HGCalCommissioning/L
 from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
 # input options:
-options.register('runNumber', 1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+options.register('runNumber', 1695762407, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "run number")
+options.register('maxEventsPerLumiSection', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Break in lumi sections using this event count")
 options.register('fedId', [0], VarParsing.multiplicity.list, VarParsing.varType.int,
                  "FED IDs")
 options.register('inputFiles',
@@ -107,12 +109,14 @@ process.options.wantSummary = cms.untracked.bool(True)
 process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEvents))
 process.source = cms.Source(
   "HGCalSlinkFromRawSource",
+  isRealData=cms.untracked.bool(True),
+  runNumber=cms.untracked.uint32(options.runNumber),
+  firstLumiSection=cms.untracked.uint32(1),
+  maxEventsPerLumiSection=cms.untracked.int32(options.maxEventsPerLumiSection),
+  useL1EventID=cms.untracked.bool(True),
   fedIds=cms.untracked.vuint32(*options.fedId),
   inputs=cms.untracked.vstring(*options.inputFiles),
   trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
-  firstRun=cms.untracked.uint32(options.runNumber),
-  firstLuminosityBlockForEachRun=cms.untracked.VLuminosityBlockID(cms.LuminosityBlockID(1, 0)),
-  fileNames=cms.untracked.vstring(*options.inputFiles),
 )
 process.rawDataCollector = cms.EDAlias(
   source=cms.VPSet(
@@ -229,6 +233,8 @@ if options.storeOutput:
     fileName=cms.untracked.string(options.output),
     outputCommands=cms.untracked.vstring(
         'drop *',
+        'keep HGCalTestSystemMetaData_*_*_*',
+        'keep FEDRawDataCollection_*_*_*',
         'keep *SoA*_hgcalDigis_*_*',
         'keep *SoA*_hgcalRecHits_*_*',
     ),

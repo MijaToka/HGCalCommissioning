@@ -38,48 +38,47 @@ namespace hgcal_slinkfromraw {
       EndOfStateEnum
     };
 
-    FsmState() {
-    }
+    FsmState() { }
     
-    FsmState(State s) {
+    FsmState(State s) { 
       _state=s;
     }
     
-    State state() const {
+    inline State state() const {
       return _state;
     }
 
-    void setState(State s) {
+    inline void setState(State s) {
       _state=s;
     }
 
-    bool staticState() const {
+    inline bool staticState() const {
       //return _state<EndOfStaticEnum;
       return staticState(_state);
     }
     
-    bool transientState() const {
+    inline bool transientState() const {
       return transientState(_state);
     }
     
-    bool allowedChange(State s) {
+    inline bool allowedChange(State s) {
       return allowedChange(_state,s);
     }
     
-    const std::string& stateName() const {
+    inline const std::string& stateName() const {
       return stateName(_state);
     }
 
     // Utilities
-    static bool staticState(State s) {
+    inline static bool staticState(State s) {
       return s<EndOfStaticEnum;
     }
 
-    static bool transientState(State s) {
+    inline static bool transientState(State s) {
       return s>=EndOfStaticEnum && s<EndOfTransientEnum;
     }
     
-    static bool allowedChange(State s1, State s2) {
+    inline static bool allowedChange(State s1, State s2) {
 
       // Resetting is an exception
       if(staticState(s1) && s2==Resetting) return true;
@@ -112,7 +111,7 @@ namespace hgcal_slinkfromraw {
 	(s1==Ending       && s2==Shutdown   );      
     }
 
-    static State staticStateBeforeTransient(State s) {
+    inline static State staticStateBeforeTransient(State s) {
       if(staticState(s)) return EndOfStateEnum;
 
       if(s==Initializing) return Initial;
@@ -131,7 +130,7 @@ namespace hgcal_slinkfromraw {
     }
         
 
-    static State staticStateAfterTransient(State s) {
+    inline static State staticStateAfterTransient(State s) {
       if(staticState(s)) return EndOfStateEnum;
 
       if(s==Initializing) return Halted;
@@ -150,46 +149,25 @@ namespace hgcal_slinkfromraw {
     }
         
     // Conversion of enum values to human-readable strings    
-    static const std::string& stateName(State s) {
+    inline static const std::string& stateName(State s) {
       if(s<EndOfStateEnum) return _stateName[s];
       return _unknown;
     }
-      
+    
+    inline static std::string _unknown{"Unknown     "};
+    inline static std::string _stateName[State::EndOfStateEnum] = {
+      // Statics
+      "Shutdown    ", "Initial     ", "Halted      ", "ConfiguredA ", "ConfiguredB ", "Running     ", "Paused      ",
+      // Transients
+      "Initializing", "ConfiguringA", "ConfiguringB", "Starting    ", "Pausing     ", "Resuming    ", "Stopping    ", "HaltingB    ", "HaltingA    ", "Resetting   ", "Ending      ",
+      // For file and buffer records only    
+      "Continuing  "
+    };
+
+    
   private:
     State _state;
+  };
   
-    static const std::string _unknown;
-    static const std::string _stateName[EndOfStateEnum];
-  };
- 
-  const std::string FsmState::_unknown="Unknown     ";
-    
-  const std::string FsmState::_stateName[EndOfStateEnum]={
-    // Statics
-    "Shutdown    ",
-    "Initial     ",
-    "Halted      ",
-    "ConfiguredA ",
-    "ConfiguredB ",
-    "Running     ",
-    "Paused      ",
-      
-    // Transients
-    "Initializing",
-    "ConfiguringA",
-    "ConfiguringB",
-    "Starting    ",
-    "Pausing     ",
-    "Resuming    ",
-    "Stopping    ",
-    "HaltingB    ",
-    "HaltingA    ",
-    "Resetting   ",
-    "Ending      ",
-    
-    // For file and buffer records only    
-    "Continuing  "
-  };
-
 }
 #endif
