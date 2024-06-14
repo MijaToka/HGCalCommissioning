@@ -37,14 +37,10 @@
 //
 
 class HGCalRunFEDReadoutSequence : public edm::one::EDProducer<edm::EndRunProducer> {
-  
 public:
-
   //
-  HGCalRunFEDReadoutSequence(edm::ParameterSet const& iConfig) :
-    tableName_( iConfig.getParameter<std::string>("tableName") ),
-    moduleTkn_(esConsumes<edm::Transition::EndRun>())
-  {
+  HGCalRunFEDReadoutSequence(edm::ParameterSet const &iConfig)
+      : tableName_(iConfig.getParameter<std::string>("tableName")), moduleTkn_(esConsumes<edm::Transition::EndRun>()) {
     produces<nanoaod::FlatTable, edm::Transition::EndRun>(tableName_);
   }
 
@@ -52,43 +48,42 @@ public:
   ~HGCalRunFEDReadoutSequence() override {}
 
   //
-  static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+  static void fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
     edm::ParameterSetDescription desc;
-    desc.add<std::string>("tableName","HGCFEDReadoutTable");
+    desc.add<std::string>("tableName", "HGCFEDReadout");
     descriptions.addWithDefaultLabel(desc);
   }
 
   //std::shared_ptr<int> globalBeginRun(edm::Run const &, edm::EventSetup const &) const override { return nullptr; }
 
   //void globalEndRun(edm::Run const &, edm::EventSetup const &) override {}
-  
-  void produce(edm::Event &iEvent, const edm::EventSetup &iSetup) override { }
+
+  void produce(edm::Event &iEvent, const edm::EventSetup &iSetup) override {}
 
   void endRunProduce(edm::Run &iRun, const edm::EventSetup &iSetup) final {
-
     //convert module mapping to rows of a flat table
-    auto const& modules = iSetup.getData(moduleTkn_);
+    auto const &modules = iSetup.getData(moduleTkn_);
     const size_t nmodules = modules.view().metadata().size();
     std::vector<uint32_t> fed(nmodules), seq(nmodules), modtype(nmodules), celltype(nmodules);
-    for(size_t i=0; i<nmodules; i++) {
+    for (size_t i = 0; i < nmodules; i++) {
       auto imod = modules.view()[i];
-      fed[i]=imod.fedid();
-      seq[i]=imod.econdidx();
-      modtype[i]=imod.typeidx();
-      celltype[i]=imod.celltype();
+      fed[i] = imod.fedid();
+      seq[i] = imod.econdidx();
+      modtype[i] = imod.typeidx();
+      celltype[i] = imod.celltype();
     }
 
     //the table
-    auto out = std::make_unique<nanoaod::FlatTable>(nmodules,tableName_,false);
+    auto out = std::make_unique<nanoaod::FlatTable>(nmodules, tableName_, false);
     out->addColumn<uint32_t>("FED", fed, "FED ID index");
     out->addColumn<uint32_t>("Seq", seq, "Module sequence in readout");
     out->addColumn<uint32_t>("ModuleType", modtype, "Module type");
-    out->addColumn<uint32_t>("CellType", celltype, "Cell type");  
+    out->addColumn<uint32_t>("CellType", celltype, "Cell type");
 
     //put in the run
     iRun.put(std::move(out), tableName_);
   }
-  
+
 protected:
   std::string tableName_;
   edm::ESGetToken<hgcal::HGCalMappingModuleParamHostCollection, HGCalElectronicsMappingRcd> moduleTkn_;
