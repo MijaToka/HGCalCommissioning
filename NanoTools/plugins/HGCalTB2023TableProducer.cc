@@ -145,6 +145,8 @@ private:
     auto out = std::make_unique<nanoaod::FlatTable>(ndigis ,"HGC",false);
     out->setDoc("HGC DIGIS and RecHits");
 
+
+
     //out->addColumnFromArray<uint32_t>("eleid", digis_view.electronicsId(), "electronics id");
     //out->addColumn<bool>("zSide", zSide, "z side");
     //out->addColumn<uint16_t>("fedId", fedId, "FED index");

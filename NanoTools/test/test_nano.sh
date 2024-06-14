@@ -1,6 +1,6 @@
 cmsDriver.py NANO \
              -s USER:HGCalCommissioning/NanoTools/hgcSysValNano_cff.hgcSysValNanoTask \
-             --customise HGCalCommissioning/NanoTools/hgcSysValNano_cff.customise_elemapper,HGCalCommissioning/NanoTools/hgcSysValNano_cff.customize_nanoOutput \
+             --customise HGCalCommissioning/NanoTools/hgcSysValNano_cff.customise_elemapper \
              --datatier NANOAOD \
              --eventcontent NANOAOD \
              --filein file:/afs/cern.ch/user/p/psilva/public/TB2024/output.root \
