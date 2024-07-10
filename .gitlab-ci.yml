@@ -1,13 +1,36 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/ee/user/application_security/secret_detection/#customizing-settings
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
+image: gitlab-registry.cern.ch/cms-cloud/cmssw-docker/al9-cms
+
 stages:
-- test
-sast:
-  stage: test
-include:
-- template: Security/SAST.gitlab-ci.yml
+- Compilation check
+
+default:
+  tags:
+  - cvmfs
+  before_script:
+    - git config --global user.email "hgcalrd@cern.ch"
+    - git config --global user.name "HGCAL Raw Data"
+    - git config --global user.github hgcalrd
+    - shopt -s expand_aliases
+    - set +u && source /cvmfs/cms.cern.ch/cmsset_default.sh; set -u
+    - cmssw-el9 -- cat /etc/redhat-release
+    - export SCRAM_ARCH=el9_amd64_gcc12
+    - export MY_CMSSW_REL=CMSSW_14_1_0_pre4
+
+compilation-check:
+  stage: Compilation check
+  only: 
+  - merge_requests
+  script:
+    - echo "Testing branch $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - cmsrel $MY_CMSSW_REL
+    - cd $MY_CMSSW_REL/src/
+    - cmsenv
+    - git cms-merge-topic -u CMS-HGCAL:dev/hackathon_base_CMSSW_14_1_X
+    - git clone https://gitlab.cern.ch/hgcal-dpg/hgcal-comm.git HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    - ls -ltr
+    - scram b -j 8
+    - scram build code-checks
+    - scram build code-format
+  allow_failure: false
+
+
