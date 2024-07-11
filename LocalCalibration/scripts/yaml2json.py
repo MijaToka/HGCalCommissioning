@@ -12,7 +12,7 @@ def pprint(d):
     return str_json
 
 def revive_hex(str_json):
-    str_json = re.sub(r'"headerMarker":\s+([0-9])', r'"headerMarker": 0x\1', str_json)
+    str_json = re.sub(r'"headerMarker":\s+([0-9]+)', r'"headerMarker": "0x\1"', str_json)
     return str_json
     
 def index_gain(gain):
