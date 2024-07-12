@@ -8,6 +8,8 @@ def customise_hgcalmapper_test(process):
                                  modules='HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt')
 
 # build NANO task
+nanoMetadata = cms.EDProducer("UniqueStringProducer",
+                              strings = cms.PSet( tag = cms.string("untagged") ) )
 hgcRunFEDReadoutTable = cms.EDProducer("HGCalRunFEDReadoutSequence")
 hgCalNanoTable = cms.EDProducer("HGCalNanoTableProducer")
-hgcSysValNanoTask = cms.Task(hgcRunFEDReadoutTable, hgCalNanoTable)
+hgcSysValNanoTask = cms.Task(nanoMetadata,hgcRunFEDReadoutTable, hgCalNanoTable)
