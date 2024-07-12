@@ -54,6 +54,10 @@ options.register('params',f"{datadir}/level0_calib_params.json",
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
+# nano options:
+options.register('skipDigi', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "skip Digis for flat table")
+
 # output options:
 options.register('dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also dump the FEDRawData content")
@@ -128,23 +132,11 @@ process.rawDataCollector = cms.EDAlias(
 #print(">>> Prepare geometry...")
 process.load(f"Configuration.Geometry.Geometry{options.geometry}Reco_cff")
 process.load(f"Configuration.Geometry.Geometry{options.geometry}_cff")
-process.load('Geometry.HGCalMapping.hgCalMappingESProducer_cfi')
-process.hgCalMappingESProducer.modules = cms.FileInPath(options.modules)
-process.hgCalMappingESProducer.si = cms.FileInPath(options.sicells)
-process.hgCalMappingESProducer.sipm = cms.FileInPath(options.sipmcells)
-
-# MAPPING ESProducers
-process.load('Configuration.StandardSequences.Accelerators_cff')
-process.hgCalMappingModuleESProducer = cms.ESProducer(
-  'hgcal::HGCalMappingModuleESProducer@alpaka',
-  filename=cms.FileInPath(options.modules),
-  moduleindexer=cms.ESInputTag('')
-)
-process.hgCalMappingCellESProducer = cms.ESProducer(
-  'hgcal::HGCalMappingCellESProducer@alpaka',
-  filelist=cms.vstring(options.sicells, options.sipmcells),
-  cellindexer=cms.ESInputTag('')
-)
+from Geometry.HGCalMapping.hgcalmapping_cff import customise_hgcalmapper
+process = customise_hgcalmapper(process,
+                                modules=options.modules,
+                                sicells=options.sicells,
+                                sipmcells=options.sipmcells)
 
 # GLOBAL HGCAL CONFIGURATION (for unpacker)
 process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
@@ -215,13 +207,21 @@ else:
     n_blocks=cms.int32(1024),
     n_threads=cms.int32(4096)
   )
-
+  
+process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
+process.hgcalNanoFlatTable = cms.EDProducer(
+  'HGCalNanoTableProducer',
+  digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+  rechits=cms.InputTag('hgcalRecHits', '', 'RAW2RECO'),
+  skipDigi=cms.bool(options.skipDigi)
+)
 # MAIN PROCESSES
 #print(">>> Prepare process...")
 process.p = cms.Path(
   #*process.hgCalEmptyEventFilter       # FILTER empty events
   process.hgcalDigis                    # RAW -> DIGI
   *process.hgcalRecHits                 # DIGI -> RECO (RecHit calibrations)
+  *process.hgcalNanoFlatTable
   #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
 )
 
@@ -237,6 +237,7 @@ if options.storeOutput:
         'keep FEDRawDataCollection_*_*_*',
         'keep *SoA*_hgcalDigis_*_*',
         'keep *SoA*_hgcalRecHits_*_*',
+        'keep *_hgcalNanoFlatTable_*_*'
     ),
     #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
   )

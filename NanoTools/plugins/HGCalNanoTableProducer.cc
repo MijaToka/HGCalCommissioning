@@ -1,0 +1,173 @@
+// system include files
+#include <memory>
+
+// user include files
+#include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/stream/EDProducer.h"
+
+#include "FWCore/Framework/interface/Event.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/Utilities/interface/StreamID.h"
+
+#include "CommonTools/Utils/interface/StringCutObjectSelector.h"
+
+#include "DataFormats/NanoAOD/interface/FlatTable.h"
+
+//DetId
+#include "DataFormats/ForwardDetId/interface/HGCalDetId.h"
+//Digi information
+#include "DataFormats/HGCalDigi/interface/HGCalDigiHost.h"
+//RecHit information
+#include "DataFormats/HGCalRecHit/interface/HGCalRecHitHost.h"
+//mapping information
+#include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
+#include "CondFormats/DataRecord/interface/HGCalDenseIndexInfoRcd.h"
+#include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
+
+#include "FWCore/Utilities/interface/Exception.h"
+
+#include <iostream>
+class HGCalNanoTableProducer : public edm::stream::EDProducer<> {
+public:
+  explicit HGCalNanoTableProducer(const edm::ParameterSet& iConfig)
+      : digisToken_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("digis"))),
+        rechitsToken_(consumes<hgcalrechit::HGCalRecHitHost>(iConfig.getParameter<edm::InputTag>("rechits"))),
+        denseIndexInfoTkn_(esConsumes()),
+        cellTkn_(esConsumes()),
+        moduleTkn_(esConsumes()),
+        skipDigi_(iConfig.getParameter<bool>("skipDigi")) {
+    if (!skipDigi_)
+      produces<nanoaod::FlatTable>("HGCDigi");
+    produces<nanoaod::FlatTable>("HGCHit");
+  }
+
+  ~HGCalNanoTableProducer() override {}
+
+  static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
+    edm::ParameterSetDescription desc;
+    desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis"));
+    desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits"));
+    desc.add<bool>("skipDigi", false);
+    descriptions.addWithDefaultLabel(desc);
+  }
+
+private:
+  void beginStream(edm::StreamID) override{};
+
+  void produce(edm::Event& iEvent, const edm::EventSetup& iSetup) override {
+    using namespace edm;
+    //retrieve digis
+    const auto& digis = iEvent.get(digisToken_);
+    auto const& digis_view = digis.const_view();
+    int32_t ndigis = digis_view.metadata().size();
+    //retrieve rechits
+    const auto& rechits = iEvent.get(rechitsToken_);
+    auto const& rechits_view = rechits.const_view();
+    int32_t nrechits = rechits_view.metadata().size();
+    //retrieve mapping parameters
+    auto const& cellInfo = iSetup.getData(cellTkn_);
+    auto const& cellInfo_view = cellInfo.const_view();
+    auto const& moduleInfo = iSetup.getData(moduleTkn_);
+    auto const& moduleInfo_view = moduleInfo.const_view();
+    auto const& denseIndexInfo = iSetup.getData(denseIndexInfoTkn_);
+    auto const& denseIndexInfo_view = denseIndexInfo.const_view();
+    int32_t ndenseIndices = denseIndexInfo_view.metadata().size();
+
+    //all SoA must match in size otherwise we are in trouble
+    assert(ndigis == nrechits && ndigis == ndenseIndices);
+
+    //fill table
+    if (!skipDigi_) {
+      auto outdigi = std::make_unique<nanoaod::FlatTable>(ndigis, "HGCDigi", false);
+      outdigi->setDoc("HGC DIGIS");
+      //temporary hack
+      //digi flattable
+      std::vector<uint8_t> tctp(ndigis), chType(ndigis);
+      std::vector<uint16_t> adc(ndigis), adcm1(ndigis), tot(ndigis), toa(ndigis), cm(ndigis), flags(ndigis),
+          channel(ndigis), fedId(ndigis), fedReadoutSeq(ndigis);
+      std::vector<int> chI1(ndigis), chI2(ndigis), modI1(ndigis), modI2(ndigis);
+      std::vector<bool> isSiPM(ndigis);
+
+      for (int32_t i = 0; i < ndigis; i++) {
+        tctp[i] = digis_view.tctp()[i];
+        adc[i] = digis_view.adc()[i];
+        adcm1[i] = digis_view.adcm1()[i];
+        tot[i] = digis_view.tot()[i];
+        toa[i] = digis_view.toa()[i];
+        cm[i] = digis_view.cm()[i];
+        flags[i] = digis_view.flags()[i];
+        channel[i] = denseIndexInfo_view.chNumber()[i];
+        fedId[i] = denseIndexInfo_view.fedId()[i];
+        fedReadoutSeq[i] = denseIndexInfo_view.fedReadoutSeq()[i];
+        uint32_t cellInfoIdx = denseIndexInfo_view.cellInfoIdx()[i];
+        chType[i] = cellInfo_view.t()[cellInfoIdx];
+        chI1[i] = cellInfo_view.i1()[cellInfoIdx];
+        chI2[i] = cellInfo_view.i2()[cellInfoIdx];
+        uint32_t modInfoIdx = denseIndexInfo_view.modInfoIdx()[i];
+        isSiPM[i] = moduleInfo_view.isSiPM()[modInfoIdx];
+        modI1[i] = moduleInfo_view.i1()[modInfoIdx];
+        modI2[i] = moduleInfo_view.i2()[modInfoIdx];
+      }
+      outdigi->addColumn<uint16_t>("tctp", tctp, "Tc/Tp flags (2b)");
+      outdigi->addColumn<uint16_t>("adc", adc, "adc measurement");
+      outdigi->addColumn<uint16_t>("adcm1", adcm1, "adc measurement in BX-1");
+      outdigi->addColumn<uint16_t>("tot", tot, "tot measurement");
+      outdigi->addColumn<uint16_t>("toa", toa, "toa measurement");
+      outdigi->addColumn<uint16_t>("cm", cm, "common mode sum");
+      outdigi->addColumn<uint16_t>("flags", flags, "unpacking quality flags");
+      outdigi->addColumn<int>("chType", chType, "channel type");
+      outdigi->addColumn<uint16_t>("channel", channel, "sequential channel counting := (chip*2+half)*37 + 1/2 channel");
+      outdigi->addColumn<bool>("isSiPM", isSiPM, "is tileboard or wafer");
+      outdigi->addColumn<int>("modI1", modI1, "Si wafer U or tileboard iring coordinate");
+      outdigi->addColumn<int>("modI2", modI2, "Si wafer V or tileboard iphi coordinate");
+      outdigi->addColumn<int>("chI1", chI1, "Si channel U or tile iring coordinate");
+      outdigi->addColumn<int>("chI2", chI2, "Si channel V or tile iphi coordinate");
+      outdigi->addColumn<uint16_t>("fedId", fedId, "FED index");
+      outdigi->addColumn<uint16_t>("fedReadoutSeq", fedReadoutSeq, "ECON-D index in FED readout sequence");
+
+      iEvent.put(std::move(outdigi), "HGCDigi");
+    }
+
+    //rechit flattable
+    auto outhit = std::make_unique<nanoaod::FlatTable>(nrechits, "HGCHit", false);
+    outhit->setDoc("HGC RecHits");
+    std::vector<double> energy(nrechits), time(nrechits);
+    std::vector<float> x(nrechits), y(nrechits);
+    std::vector<int> layer(nrechits);
+    std::vector<bool> zSide(nrechits);
+    for (int32_t i = 0; i < nrechits; i++) {
+      energy[i] = rechits_view.energy()[i];
+      time[i] = rechits_view.time()[i];
+      x[i] = denseIndexInfo_view.z()[i];
+      y[i] = denseIndexInfo_view.y()[i];
+      HGCalDetId detId(denseIndexInfo_view.detid()[i]);
+      layer[i] = detId.layer();
+      zSide[i] = detId.zside();
+    }
+    outhit->addColumn<double>("energy", energy, "calibrated energy");
+    outhit->addColumn<double>("time", time, "time");
+    outhit->addColumn<int>("layer", layer, "layer");
+    outhit->addColumn<float>("x", x, "x coordinate from geometry");
+    outhit->addColumn<float>("y", y, "y coordinate from geometry");
+    outhit->addColumn<bool>("zSide", zSide, "z side");
+    iEvent.put(std::move(outhit), "HGCHit");
+  }
+
+  void endStream() override{};
+
+  void beginRun(edm::Run const& iRun, edm::EventSetup const& iSetup) override {}
+
+  // ----------member data ---------------------------
+  const edm::EDGetTokenT<hgcaldigi::HGCalDigiHost> digisToken_;
+  const edm::EDGetTokenT<hgcalrechit::HGCalRecHitHost> rechitsToken_;
+  edm::ESGetToken<hgcal::HGCalDenseIndexInfoHost, HGCalDenseIndexInfoRcd> denseIndexInfoTkn_;
+  edm::ESGetToken<hgcal::HGCalMappingCellParamHost, HGCalElectronicsMappingRcd> cellTkn_;
+  edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleTkn_;
+
+  bool skipDigi_;
+};
+
+//define this as a plug-in
+DEFINE_FWK_MODULE(HGCalNanoTableProducer);
