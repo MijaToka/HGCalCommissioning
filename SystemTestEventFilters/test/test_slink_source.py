@@ -18,10 +18,10 @@ options.register(
     VarParsing.multiplicity.list, VarParsing.varType.string, "input Trigger link file")
 options.register('dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also dump the FEDRawData content")
-options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "also store the RAW output into a streamer file")
+options.register('storeOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also store the output in EDM format")
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "debugging mode")
+                 "activate debug")
 options.parseArguments()
 
 # message logger
@@ -51,19 +51,14 @@ process.p = cms.Path()
 
 process.outpath = cms.EndPath()
 
-if options.dumpFRD:
-    process.dump = cms.EDAnalyzer("DumpFEDRawDataProduct",
-                                  label=cms.untracked.InputTag('source'),
-                                  feds=cms.untracked.vint32(*options.fedId),
-                                  dumpPayload=cms.untracked.bool(True)
-                                  )
-    process.p *= process.dump
-
-if options.storeRAWOutput:
-    process.outputRAW = cms.OutputModule("FRDOutputModule",
-                                         fileName=cms.untracked.string(options.output),
-                                         source=cms.InputTag('source'),
-                                         frdVersion=cms.untracked.uint32(6),
-                                         frdFileVersion=cms.untracked.uint32(1),
-                                         )
-    process.outpath += process.outputRAW
+if options.storeOutput:
+  process.output = cms.OutputModule(
+    "PoolOutputModule",
+    fileName=cms.untracked.string(options.output),
+    outputCommands=cms.untracked.vstring(
+        'drop *',
+        'keep HGCalTestSystemMetaData_*_*_*',
+        'keep FEDRawDataCollection_*_*_*',
+    ),
+  )
+  process.outpath += process.output

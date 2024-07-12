@@ -20,14 +20,14 @@ options.register('maxEventsPerLumiSection', -1, VarParsing.multiplicity.singleto
 options.register('fedId', [0], VarParsing.multiplicity.list, VarParsing.varType.int,
                  "FED IDs")
 options.register('inputFiles',
-                 '/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link1_File0000000001.bin',
+                 '/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/HgcalLabtestSerenity/Relay1710429303/Run1710429303_Link1_File0000000000.bin',
                  VarParsing.multiplicity.list, VarParsing.varType.string, "input DAQ link file")
 options.register('inputTrigFiles',
-                 '/eos/cms/store/group/dpg_hgcal/tb_hgcal/2023/BeamTestSep/HgcalBeamtestSep2023/Relay1695762407/Run1695762407_Link0_File0000000001.bin',
+                 '/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/HgcalLabtestSerenity/Relay1710429303/Run1710429303_Link0_File0000000000.bin',
                  VarParsing.multiplicity.list, VarParsing.varType.string, "input Trigger link file")
 # geometry options:
 options.register('geometry', 'Extended2026D94', VarParsing.multiplicity.singleton, VarParsing.varType.string, 'geometry to use')
-options.register('modules',"",mytype=VarParsing.varType.string,
+options.register('modules',"HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_B27v1.txt",mytype=VarParsing.varType.string,
                  info="Path to module mapper. Absolute, or relative to CMSSW src directory")
 options.register('sicells','Geometry/HGCalMapping/data/CellMaps/WaferCellMapTraces.txt',mytype=VarParsing.varType.string,
                  info="Path to Si cell mapper. Absolute, or relative to CMSSW src directory")
@@ -45,11 +45,11 @@ options.register('econdHeaderMarker', -1, VarParsing.multiplicity.singleton, Var
 options.register('mismatchPassthrough', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
 # module calibration & configurations:
-options.register('fedconfig',f"{datadir}/config_feds.json",mytype=VarParsing.varType.string,
+options.register('fedconfig',f"{datadir}/config_feds_B27v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
-options.register('modconfig',f"{datadir}/config_econds.json",mytype=VarParsing.varType.string,
+options.register('modconfig',f"{datadir}/config_econds_B27v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
-options.register('params',f"{datadir}/level0_calib_params.json",
+options.register('params',f"{datadir}/level0_calib_params_B27v1.json",
                  mytype=VarParsing.varType.string,
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
@@ -64,16 +64,11 @@ options.register('storeOutput', True, VarParsing.multiplicity.singleton, VarPars
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
+options.register('dqmOnly', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "run only the DQM step")
 options.parseArguments()
 
 # DEFAULTS
-if not options.modules:
-  # git clone https://github.com/pfs/Geometry-HGCalMapping.git $CMSSW_BASE/src/Geometry/HGCalMapping/data
-  # TODO: move to https://gitlab.cern.ch/hgcal-dpg/hgcal-comm
-  #options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules
-  #options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test.txt" # test beam with six modules
-  #options.modules = "Geometry/HGCalMapping/data/ModuleMaps/modulelocator_test_2mods.txt" # only first two modules, fedId=49
-  options.modules = "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_test_2mods.txt" # # only first two modules, fedId=0
 print(f">>> fedIds:       {options.fedId!r}")
 print(f">>> Input files:  {options.inputFiles!r}")
 print(f">>> Module map:   {options.modules!r}")
@@ -218,11 +213,25 @@ else:
 
 # MAIN PROCESSES
 #print(">>> Prepare process...")
+
+#--------------------------------------------------
+# tmp dqm
+#--------------------------------------------------
+process.load('HGCalCommissioning.DQM.hgCalSysValDigisClient_cfi')
+process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
+process.hgCalSysValDigisClient.PrescaleFactor = 1
+
+process.DQMStore = cms.Service("DQMStore")
+process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
+process.dqmSaver.tag = 'HGCAL'
+process.dqmSaver.runNumber = 123456
+
 process.p = cms.Path(
   #*process.hgCalEmptyEventFilter       # FILTER empty events
   process.hgcalDigis                    # RAW -> DIGI
   *process.hgcalRecHits                 # DIGI -> RECO (RecHit calibrations)
   #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
+  #*process.hgCalSysValDigisClient * process.hgCalSysValDigisHarvester * process.dqmSaver  # DQM
 )
 
 process.outpath = cms.EndPath()
@@ -260,3 +269,4 @@ if options.storeRAWOutput:
     frdFileVersion=cms.untracked.uint32(1),
   )
   process.outpath += process.outputRAW
+  
