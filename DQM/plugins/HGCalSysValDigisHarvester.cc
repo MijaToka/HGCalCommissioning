@@ -1,0 +1,192 @@
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+
+#include <iostream>
+#include <iomanip>
+#include <stdio.h>
+#include <string>
+#include <sstream>
+#include <math.h>
+#include <map>
+
+//Framework
+#include "FWCore/Framework/interface/Frameworkfwd.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
+#include "FWCore/Utilities/interface/InputTag.h"
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "FWCore/Framework/interface/ESWatcher.h"
+#include "FWCore/ParameterSet/interface/FileInPath.h"
+
+//DQM
+#include "DQMServices/Core/interface/DQMEDHarvester.h"
+#include "DQMServices/Core/interface/DQMStore.h"
+#include "DQMServices/Core/interface/MonitorElement.h"
+
+#include "HGCalCommissioning/DQM/interface/HGCalSysValDQMCommon.h"
+
+#include <TString.h>
+#include <TFile.h>
+#include <TKey.h>
+
+#include <fstream>
+#include <iostream>
+
+using namespace hgcal::dqm;
+
+/**
+   @short DQM harvester for the DIGI monitoring elements at the end of lumi section / run 
+*/
+class HGCalSysValDigisHarvester : public DQMEDHarvester {
+public:
+  typedef std::pair<unsigned int, unsigned int> ElecKey_t; // (fed-id, ECON-D index)
+  typedef std::tuple<bool,int,int,int> GeomKey_t;
+
+  HGCalSysValDigisHarvester(const edm::ParameterSet &ps);
+  virtual ~HGCalSysValDigisHarvester();
+  static void fillDescriptions(edm::ConfigurationDescriptions &descriptions);
+
+protected:
+  void beginJob();
+  void dqmEndLuminosityBlock(DQMStore::IBooker &,
+                             DQMStore::IGetter &,
+                             edm::LuminosityBlock const &,
+                             edm::EventSetup const &);
+  void dqmEndJob(DQMStore::IBooker &, DQMStore::IGetter &) override;
+
+private:
+
+  //location of the hex map templates
+  std::string templateDir_;
+
+  //monitoring elements
+  std::map<std::string, std::map<std::string, MonitorElement *> > hexPlots_;  
+};
+
+//
+HGCalSysValDigisHarvester::HGCalSysValDigisHarvester(const edm::ParameterSet &iConfig)
+    : templateDir_(iConfig.getParameter<std::string>("TemplateFiles"))
+{
+
+}
+
+//
+void HGCalSysValDigisHarvester::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
+  edm::ParameterSetDescription desc;
+  desc.add<std::string>("TemplateFiles","HGCalCommissioning/DQM/data");
+  descriptions.addWithDefaultLabel(desc);
+}
+
+//
+HGCalSysValDigisHarvester::~HGCalSysValDigisHarvester() { edm::LogInfo("HGCalSysValDigisHarvester") << "@ DTOR"; }
+
+//
+void HGCalSysValDigisHarvester::beginJob() { edm::LogInfo("HGCalSysValDigisHarvester") << " @ beginJob"; }
+
+//
+void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker,
+                                                      DQMStore::IGetter &igetter,
+                                                      edm::LuminosityBlock const &iLumi,
+                                                      edm::EventSetup const &iSetup) {
+
+  //read the available modules from the ECON-D payload histogram
+  std::vector<std::string> typecodes;
+  const MonitorElement *me = igetter.get("HGCAL/Digis/econdPayload");
+  TAxis *xaxis = me->getTH2F()->GetXaxis();
+  for(int i=1; i<=xaxis->GetNbins(); i++)
+    typecodes.push_back( xaxis->GetBinLabel(i) );
+
+  //book the hex summary plots
+  ibooker.setCurrentFolder("HGCAL/Modules");
+  for(size_t i=0; i<typecodes.size(); i++) {
+    
+    std::string t = typecodes[i];
+
+    std::ostringstream ss;
+    ss << "_module_" << i;
+    std::string tag(ss.str());
+
+    //define the hex plots
+    hexPlots_[t]["avgcm"] = ibooker.book2DPoly("hex_avgcm"+tag,  t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::CMAVG), -14, 14, -14, 14);
+    hexPlots_[t]["avgadc"] = ibooker.book2DPoly("hex_avgadc"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::PEDESTAL), -14, 14, -14, 14);
+    hexPlots_[t]["stdadc"] = ibooker.book2DPoly("hex_stdadc"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::NOISE), -14, 14, -14, 14);
+    hexPlots_[t]["deltaadc"] = ibooker.book2DPoly("hex_deltaadc"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::DELTAPEDESTAL), -14, 14, -14, 14);
+    hexPlots_[t]["avgtoa"] = ibooker.book2DPoly("hex_avgtoa"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::TOAAVG), -14, 14, -14, 14);
+    hexPlots_[t]["avgtot"] = ibooker.book2DPoly("hex_avgtot"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::TOTAVG), -14, 14, -14, 14);
+
+    //the sums histogram + helper functions to compute final quantities
+    const MonitorElement *sum_me = igetter.get("HGCAL/Digis/sums" + tag);
+    auto mean = [](SumIndices_t vidx, SumIndices_t nidx, uint32_t chIdx, const MonitorElement *sum_me) -> float { 
+      float n = sum_me->getBinContent(chIdx+1,nidx+1);
+      float v = sum_me->getBinContent(chIdx+1,vidx+1);
+      return n>0 ?  v/n : 0.f;
+    };
+    auto stddev = [](SumIndices_t vvidx, SumIndices_t vidx, SumIndices_t nidx,uint32_t chIdx, const MonitorElement *sum_me) -> float { 
+      float n = sum_me->getBinContent(chIdx+1, nidx+1);
+      float v = sum_me->getBinContent(chIdx+1, vidx+1);
+      float vv = sum_me->getBinContent(chIdx+1, vvidx+1);
+      return n > 1 ? sqrt(vv/n-pow(v/n,2))*(n/(n-1)) : 0.f; 
+    };
+
+    //open file and loop over keys to hadd to THPoly (sequence of channel representations)
+    std::string geourl = templateDir_ + "/geometry_" + t.substr(0,4) + "_wafer.root";
+    edm::FileInPath fip(geourl);
+    TFile *fgeo = new TFile(fip.fullPath().c_str(), "R");
+    TGraph *gr;
+    TKey *key;
+    TIter nextkey(fgeo->GetDirectory(nullptr)->GetListOfKeys());
+    uint32_t iobj(0);
+    while ((key = (TKey *)nextkey())) {
+
+      TObject *obj = key->ReadObj();
+      if (!obj->InheritsFrom("TGraph")) continue;
+      gr = (TGraph *)obj;
+
+      //skip CM channels
+      bool isCM = (iobj % 39 == 37) || (iobj % 39 == 38);
+      if(isCM) {
+        iobj++;
+        continue;
+      }
+
+      //compute summary for this standard channel
+      unsigned eRx = int(iobj/39); //NOTE: CM channels were included in the objects
+      unsigned chIdx = iobj - eRx*2;
+
+      float avgcm = mean( SumIndices_t::SUMCM, SumIndices_t::NCM, chIdx, sum_me);
+      hexPlots_[t]["avgcm"]->addBin(gr);
+      hexPlots_[t]["avgcm"]->setBinContent(chIdx+1, avgcm);
+      
+      float avgadc = mean( SumIndices_t::SUMADC, SumIndices_t::NADC, chIdx, sum_me);
+      hexPlots_[t]["avgadc"]->addBin(gr);
+      hexPlots_[t]["avgadc"]->setBinContent(chIdx+1, avgadc);
+      
+      float stdadc = stddev( SumIndices_t::SUMADC2, SumIndices_t::SUMADC, SumIndices_t::NADC, chIdx, sum_me);
+      hexPlots_[t]["stdadc"]->addBin(gr);
+      hexPlots_[t]["stdadc"]->setBinContent(chIdx+1, stdadc);
+
+      float deltaadc = avgadc - mean( SumIndices_t::SUMADCM1, SumIndices_t::NADCM1, chIdx, sum_me);
+      hexPlots_[t]["deltaadc"]->addBin(gr);
+      hexPlots_[t]["deltaadc"]->setBinContent(chIdx+1, deltaadc);
+
+      float avgtoa = mean( SumIndices_t::SUMTOA, SumIndices_t::NTOA, chIdx, sum_me);
+      hexPlots_[t]["avgtoa"]->addBin(gr);
+      hexPlots_[t]["avgtoa"]->setBinContent(chIdx+1, avgtoa);
+
+      float avgtot = mean( SumIndices_t::SUMTOT, SumIndices_t::NTOT, chIdx, sum_me);
+      hexPlots_[t]["avgtot"]->addBin(gr);
+      hexPlots_[t]["avgtot"]->setBinContent(chIdx+1, avgtot);
+    
+      iobj++;
+    }//end loop over template file keys
+
+    //close template file
+    fgeo->Close();
+
+  }//end loop over typecodes of this run
+
+  edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
+}
+
+//
+void HGCalSysValDigisHarvester::dqmEndJob(DQMStore::IBooker &ibooker, DQMStore::IGetter &igetter) {}
+
+DEFINE_FWK_MODULE(HGCalSysValDigisHarvester);
