@@ -1,3 +1,5 @@
+import sys
+sys.path.append("./")
 from HGCALCalibration import HGCALCalibration
 #import PedestalCorrectionsMaker
 import ROOT
@@ -6,7 +8,11 @@ import pandas as pd
 import time
 import itertools
 import json
-from HGCalCommissioning.LocalCalibration.JSONEncoder import CompactJSONEncoder
+try:
+    from HGCalCommissioning.LocalCalibration.JSONEncoder import CompactJSONEncoder
+except ImportError:
+    sys.path.append('./python/')
+    from JSONEncoder import CompactJSONEncoder
 
 class HGCALPedestals(HGCALCalibration):
         #methods
@@ -110,73 +116,64 @@ class HGCALPedestals(HGCALCalibration):
 
         ROOT.ROOT.DisableImplicitMT()
 
+    @staticmethod
+    def buildCorrectionsFromModuleHisto(args) :
+
+        '''this method analysis a 3D histogram of channel vs ADC vs CM and returns a dict with the proposed correction values'''
+        
+        typecode, h = args
+        cor_values = {'Typecode':typecode, 'Channel':[], 'ADC_ped':[], 'CM_ped':[], 'CM_slope':[], 'Noise':[], 'BXm1_slope':[]}
+        
+        ny,ymin,ymax=h.GetNbinsY(),h.GetYaxis().GetXmin(),h.GetYaxis().GetXmax()
+        nz,zmin,zmax=h.GetNbinsZ(),h.GetZaxis().GetXmin(),h.GetZaxis().GetXmax()
+        h2=ROOT.TH2F('cmvsadc','',ny,ymin,ymax,nz,zmin,zmax)
+        for xbin in range(h.GetNbinsX()):
+            
+            h2.Reset('ICE')            
+            for ybin,zbin in itertools.product(range(ny),range(nz)):
+                h2.SetBinContent(ybin+1,zbin+1, h.GetBinContent(xbin+1,ybin+1,zbin+1) )
+                
+            cor_values['Channel'].append( xbin )
+            cor_values['ADC_ped'].append( h2.GetMean(2) )            
+            cor_values['Noise'].append(h2.GetRMS(2))           
+            cor_values['CM_ped'].append( h2.GetMean(1) )
+            cor_values['CM_slope'].append( h2.GetCorrelationFactor() )
+            cor_values['BXm1_slope'].append(0.)        
+
+        h2.Delete()
+
+        return cor_values
+
     #Method to summarize the pedestals and correlation with CM
     def createCorrectionJson(self, url, jsonurl=None, gain=80):
 
-        if jsonurl is None: jsonurl=f'etc/pedestals_{gain}fC.json.gz'
+        if jsonurl is None: jsonurl=url.replace('.root',f'_{gain}fC.json.gz')
 
-        correctors={}
-        #cor_list = ['pedestal','cm','rho','noise']
-        cor_list = ['ADC_ped', 'CM_ped', 'CM_slope', 'Noise', 'BXm1_slope']
-        #Project the TH3 to get the average values and correlation factors with CM per channel
+        #submit 1 task per histogram that needs to be projected and collect the outputs of the jobs
+        tasklist=[]
         fIn=ROOT.TFile.Open(url)
         for k in fIn.GetListOfKeys():
           hname=k.GetName()
           h=k.ReadObj()
           #Define the modulo
+          #This is temporary and must be FIXED: name will be in the histogram
           mod=int(hname.split('_')[-1])
-          typecode = 'ML-F3PT-TX-0003'
-
+          typecode = f'ML-F3PT-TX-0003:{mod}'
           h=fIn.Get(f'chcmadc_{mod}')
+          tasklist.append( (typecode,h) )
 
-          #hold the values per channel of this module
-          cor_values= dict( [(k,[]) for k in cor_list + ['Channel'] ] )
+        #run the tasks
+        import tqdm
+        from multiprocessing import Pool
+        with Pool(8) as p:
+            results = list(tqdm.tqdm(p.imap(self.buildCorrectionsFromModuleHisto, tasklist), total=len(tasklist)))
 
-          ny,ymin,ymax=h.GetNbinsY(),h.GetYaxis().GetXmin(),h.GetYaxis().GetXmax()
-          nz,zmin,zmax=h.GetNbinsZ(),h.GetZaxis().GetXmin(),h.GetZaxis().GetXmax()
-          h2=ROOT.TH2F('cmvsadc','',ny,ymin,ymax,nz,zmin,zmax)
-
-          for xbin in range(h.GetNbinsX()):
-
-            h2.Reset('ICE')
-            #print(f"valores {ny} {nz}")
-            for ybin,zbin in itertools.product(range(ny),range(nz)):
-              h2.SetBinContent(ybin+1,zbin+1, h.GetBinContent(xbin+1,ybin+1,zbin+1) )
-
-            #cor_values['ch'].append( h.GetXaxis().GetBinLowEdge(xbin+1) )
-            cor_values['Channel'].append( h.GetXaxis().GetBinLowEdge(xbin+1) )
-            #cor_values['pedestal'].append( h2.GetMean(2) )
-            cor_values['ADC_ped'].append( h2.GetMean(2) )
-            #cor_values['noise'].append( h2.GetRMS(2) )
-            cor_values['Noise'].append(h2.GetRMS(2))
-            #cor_values['cm'].append( h2.GetMean(1) )
-            cor_values['CM_ped'].append( h2.GetMean(1) )
-            #cor_values['rho'].append( h2.GetCorrelationFactor() )
-            cor_values['CM_slope'].append( h2.GetCorrelationFactor() )
-            cor_values['BXm1_slope'].append(0.)
-
-          cor_values['Channel'].append( h.GetXaxis().GetBinUpEdge(xbin+1) )
-
-          h2.Delete()
-
-          correctors[typecode] = {'Channel': cor_values['Channel'],
-			     'ADC_ped':  cor_values['ADC_ped'] ,
-			     'Noise':  cor_values['Noise'] ,
-                             'CM_ped':  cor_values['CM_ped'] ,
-		             'CM_slope':  cor_values['CM_slope'] ,
-		   	     'BXm1_slope':  cor_values['BXm1_slope']
-                            }
-
-        #import pandas as pd
-        #a=[]
-        #for mod in correctors.keys():
-        #    chlist=[c for c in range(len(correctors[mod]['noise'].edges)-1)]
-        #    a.append( [mod]+[ correctors[mod][k].content for k in cor_list] + [chlist] )
-        #print("VALOR DE A", a)
-        #df=pd.DataFrame(a,columns=['module']+cor_list+['channel'])
-        #df=df.explode( cor_list+['channel'] )
-        #df.to_csv(jsonurl.replace('.json.gz','.csv'),sep=' ',index=False)
-
+        #build the corrector files
+        correctors={}
+        for r in results:
+            typecode = r.pop('Typecode')
+            correctors[typecode]=r
+        fIn.Close()
         with open(jsonurl,'w') as outfile:
             json.dump(correctors,outfile,cls=CompactJSONEncoder,sort_keys=False,indent=2)
 
