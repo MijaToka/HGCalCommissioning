@@ -44,7 +44,7 @@ options.register('econdHeaderMarker', -1, VarParsing.multiplicity.singleton, Var
                  "Override begin of event marker for ECON-D (e.g. 0x154)")
 options.register('mismatchPassthrough', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
-# module calibration & configurations:
+# module calibration & configurations:n
 options.register('fedconfig',f"{datadir}/config_feds_B27v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
 options.register('modconfig',f"{datadir}/config_econds_B27v1.json",mytype=VarParsing.varType.string,

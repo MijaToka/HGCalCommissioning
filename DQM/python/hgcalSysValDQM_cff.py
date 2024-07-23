@@ -1,10 +1,12 @@
 import FWCore.ParameterSet.Config as cms
 
 
-def customizeSysValDQM(process, runNumber : int = 123456):
+def customizeSysValDQM(process, runNumber : int = 123456, MinimumEvents : int = 5000, PrescaleFactor=5000):
 
     #DQM modules
     process.load('HGCalCommissioning.DQM.hgCalSysValDigisClient_cfi')
+    process.hgCalSysValDigisClient.MinimumEvents = MinimumEvents
+    process.hgCalSysValDigisClient.PrescaleFactor = PrescaleFactor    
     process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
 
     #DQM saver

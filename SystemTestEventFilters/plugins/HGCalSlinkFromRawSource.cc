@@ -127,7 +127,6 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
 
   //build the event auxiliary quantities
   eventID_ = edm::EventID(runNumberVal_, lumiSectionVal_, eventIdVal_);
-  std::cout << runNumberVal_ << " " << lumiSectionVal_ << " " << eventIdVal_ << std::endl;
 
   edm::TimeValue_t time;
   timeval stv;

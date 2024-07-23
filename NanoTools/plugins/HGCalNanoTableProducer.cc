@@ -37,19 +37,22 @@ public:
         denseIndexInfoTkn_(esConsumes()),
         cellTkn_(esConsumes()),
         moduleTkn_(esConsumes()),
-        skipDigi_(iConfig.getParameter<bool>("skipDigi")) {
+        skipDigi_(iConfig.getParameter<bool>("skipDigi")),
+        skipRecHits_(iConfig.getParameter<bool>("skipRecHits")) {
     if (!skipDigi_)
       produces<nanoaod::FlatTable>("HGCDigi");
-    produces<nanoaod::FlatTable>("HGCHit");
+    if (!skipRecHits_)
+      produces<nanoaod::FlatTable>("HGCHit");
   }
 
   ~HGCalNanoTableProducer() override {}
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription desc;
-    desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis"));
-    desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits"));
-    desc.add<bool>("skipDigi", false);
+    desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis"))->setComment("Source of DIGIs SoA");
+    desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits"))->setComment("Source of RecHits SoA");
+    desc.add<bool>("skipDigi", false)->setComment("Does not output DIGIs table if enabled");
+    desc.add<bool>("skipRecHits", false)->setComment("Does not output RecHits table if enabled");
     descriptions.addWithDefaultLabel(desc);
   }
 
@@ -58,14 +61,7 @@ private:
 
   void produce(edm::Event& iEvent, const edm::EventSetup& iSetup) override {
     using namespace edm;
-    //retrieve digis
-    const auto& digis = iEvent.get(digisToken_);
-    auto const& digis_view = digis.const_view();
-    int32_t ndigis = digis_view.metadata().size();
-    //retrieve rechits
-    const auto& rechits = iEvent.get(rechitsToken_);
-    auto const& rechits_view = rechits.const_view();
-    int32_t nrechits = rechits_view.metadata().size();
+
     //retrieve mapping parameters
     auto const& cellInfo = iSetup.getData(cellTkn_);
     auto const& cellInfo_view = cellInfo.const_view();
@@ -75,11 +71,15 @@ private:
     auto const& denseIndexInfo_view = denseIndexInfo.const_view();
     int32_t ndenseIndices = denseIndexInfo_view.metadata().size();
 
-    //all SoA must match in size otherwise we are in trouble
-    assert(ndigis == nrechits && ndigis == ndenseIndices);
-
-    //fill table
+    //fill table for digis
     if (!skipDigi_) {
+
+      //retrieve digis and ensure they are consistent with dense indices
+      const auto& digis = iEvent.get(digisToken_);
+      auto const& digis_view = digis.const_view();
+      int32_t ndigis = digis_view.metadata().size();
+      assert(ndigis == ndenseIndices);
+
       auto outdigi = std::make_unique<nanoaod::FlatTable>(ndigis, "HGCDigi", false);
       outdigi->setDoc("HGC DIGIS");
       //temporary hack
@@ -131,28 +131,39 @@ private:
     }
 
     //rechit flattable
-    auto outhit = std::make_unique<nanoaod::FlatTable>(nrechits, "HGCHit", false);
-    outhit->setDoc("HGC RecHits");
-    std::vector<double> energy(nrechits), time(nrechits);
-    std::vector<float> x(nrechits), y(nrechits);
-    std::vector<int> layer(nrechits);
-    std::vector<bool> zSide(nrechits);
-    for (int32_t i = 0; i < nrechits; i++) {
-      energy[i] = rechits_view.energy()[i];
-      time[i] = rechits_view.time()[i];
-      x[i] = denseIndexInfo_view.z()[i];
-      y[i] = denseIndexInfo_view.y()[i];
-      HGCalDetId detId(denseIndexInfo_view.detid()[i]);
-      layer[i] = detId.layer();
-      zSide[i] = detId.zside();
+    if(!skipRecHits_) {
+      
+      //retrieve rechits and ensure size matches that of dense indices
+      const auto& rechits = iEvent.get(rechitsToken_);
+      auto const& rechits_view = rechits.const_view();
+      int32_t nrechits = rechits_view.metadata().size();
+  
+      //all SoA must match in size otherwise we are in trouble
+      assert(nrechits == ndenseIndices);
+
+      auto outhit = std::make_unique<nanoaod::FlatTable>(nrechits, "HGCHit", false);
+      outhit->setDoc("HGC RecHits");
+      std::vector<double> energy(nrechits), time(nrechits);
+      std::vector<float> x(nrechits), y(nrechits);
+      std::vector<int> layer(nrechits);
+      std::vector<bool> zSide(nrechits);
+      for (int32_t i = 0; i < nrechits; i++) {
+        energy[i] = rechits_view.energy()[i];
+        time[i] = rechits_view.time()[i];
+        x[i] = denseIndexInfo_view.z()[i];
+        y[i] = denseIndexInfo_view.y()[i];
+        HGCalDetId detId(denseIndexInfo_view.detid()[i]);
+        layer[i] = detId.layer();
+        zSide[i] = detId.zside();
+      }
+      outhit->addColumn<double>("energy", energy, "calibrated energy");
+      outhit->addColumn<double>("time", time, "time");
+      outhit->addColumn<int>("layer", layer, "layer");
+      outhit->addColumn<float>("x", x, "x coordinate from geometry");
+      outhit->addColumn<float>("y", y, "y coordinate from geometry");
+      outhit->addColumn<bool>("zSide", zSide, "z side");
+      iEvent.put(std::move(outhit), "HGCHit");
     }
-    outhit->addColumn<double>("energy", energy, "calibrated energy");
-    outhit->addColumn<double>("time", time, "time");
-    outhit->addColumn<int>("layer", layer, "layer");
-    outhit->addColumn<float>("x", x, "x coordinate from geometry");
-    outhit->addColumn<float>("y", y, "y coordinate from geometry");
-    outhit->addColumn<bool>("zSide", zSide, "z side");
-    iEvent.put(std::move(outhit), "HGCHit");
   }
 
   void endStream() override{};
@@ -166,7 +177,7 @@ private:
   edm::ESGetToken<hgcal::HGCalMappingCellParamHost, HGCalElectronicsMappingRcd> cellTkn_;
   edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleTkn_;
 
-  bool skipDigi_;
+  bool skipDigi_, skipRecHits_;
 };
 
 //define this as a plug-in
