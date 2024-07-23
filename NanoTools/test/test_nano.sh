@@ -1,3 +1,5 @@
+echo "Customise needs Fixing: this will most probably crash"
+
 cmsDriver.py NANO \
     --data \
     -s USER:HGCalCommissioning/NanoTools/hgcSysValNano_cff.hgcSysValNanoTask \
