@@ -59,7 +59,7 @@ rule step_RAW2DIGI:
         #force the file name to be always the same
         #targetout={output.root}
         #localout=${{targetout/.root/*.root}}
-        #mv $localout $targetout
+        #mv -v $localout $targetout
         """
 
 rule step_DQM:
