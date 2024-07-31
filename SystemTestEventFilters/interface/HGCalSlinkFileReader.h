@@ -14,7 +14,10 @@ namespace hgcal {
     SlinkFileReader(const std::vector<std::string> &filelist, unsigned fedId);
 
     const hgcal_slinkfromraw::RecordRunning *nextEvent();
-    void readTriggerData(HGCalTestSystemMetaData &metaData, const hgcal_slinkfromraw::RecordRunning *rTrgEvent);
+    void readTriggerData(HGCalTestSystemMetaData &metaData,
+                         const hgcal_slinkfromraw::RecordRunning *rTrgEvent,
+                         unsigned num_blocks = 6,
+                         unsigned scintillator_block_id = 5);
 
     static constexpr unsigned kTrigIdOffset = 10000;
 

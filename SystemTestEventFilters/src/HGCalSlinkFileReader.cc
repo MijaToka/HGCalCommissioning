@@ -72,9 +72,11 @@ const hgcal_slinkfromraw::RecordRunning *SlinkFileReader::nextEvent() {
 }
 
 void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
-                                      const hgcal_slinkfromraw::RecordRunning *rTrgEvent) {
+                                      const hgcal_slinkfromraw::RecordRunning *rTrgEvent,
+                                      unsigned num_blocks,
+                                      unsigned scintillator_block_id) {
   constexpr uint64_t pkt_mask = 0xff;
-  constexpr uint64_t pkt_sep = 0xfecafecafecafe;
+  constexpr uint64_t pkt_sep = 0xcafecafe;
 
   // TODO: use implementations from std <bit> in c++20
   constexpr auto countl_zero = [](uint32_t input) -> unsigned char {
@@ -108,22 +110,23 @@ void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
 
     auto p = (const uint64_t *)rTrgEvent;
     uint32_t length = 0;
-    p += 4;  // (1 record header + 2 slink header + 1 trigger readout header)
-    for (unsigned iblock = 0; iblock < 4 && p < (const uint64_t *)rTrgEvent + rTrgEvent->payloadLength(); ++iblock) {
+    p += 3;  // (1 record header + 2 slink header)
+    for (unsigned iblock = 0; iblock < num_blocks && p < (const uint64_t *)rTrgEvent + rTrgEvent->payloadLength();
+         ++iblock) {
       LogDebug("SlinkFileReader") << "Header: " << std::hex << std::setfill('0') << "0x" << *p << std::endl;
-      if ((*p >> 8) != pkt_sep) {
+      if ((*p >> 32) != pkt_sep) {
         throw cms::Exception("CorruptData")
-            << "Expected packet separator: 0x" << std::hex << pkt_sep << " read: 0x" << (*p >> 8) << " Event id: 0x"
+            << "Expected packet separator: 0x" << std::hex << pkt_sep << " read: 0x" << (*p >> 32) << " Event id: 0x"
             << rTrgEvent->slinkBoe()->eventId() << " Bx id: 0x" << rTrgEvent->slinkEoe()->bxId() << " Orbit id: 0x"
             << rTrgEvent->slinkEoe()->orbitId() << " BOE header: 0x" << rTrgEvent->slinkBoe()->boeHeader();
       }
       length = *p & pkt_mask;
-      if (iblock < 2) {
+      if (iblock < scintillator_block_id) {
         //copy from *(p+1) to *(p+length) (i.e. discard the fecafecafe... word) ?
         //std::cout << std::dec << iblock << std::endl;
         //for(uint32_t k=1; k<length+1; k++)
         //  std::cout << "\t 0x" << std::hex << *(p+k) << std::endl;
-      } else if (iblock == 2) {
+      } else if (iblock == scintillator_block_id) {
         // scintillator
         // the length should be 9 (BX) * 5 (64b word)
         // only the 1st 64b word is used; the last (5th) word is a separator

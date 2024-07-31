@@ -55,7 +55,9 @@ private:
   uint64_t nEventsRead_;
   bool useL1EventID_;
   std::vector<unsigned> fedIds_;
-  
+  unsigned trig_num_blocks_;
+  unsigned trig_scintillator_block_id_;
+
   const edm::DaqProvenanceHelper daqProvenanceHelper_;
   const HGCalMetaDataProvenanceHelper metadataProvenanceHelper_;
   edm::EventID eventID_;

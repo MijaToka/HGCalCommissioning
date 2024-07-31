@@ -67,6 +67,8 @@ HGCalSlinkFromRawSource::HGCalSlinkFromRawSource(edm::ParameterSet const& pset, 
   auto trig_inputs = pset.getUntrackedParameter<std::vector<std::string>>("trig_inputs", {});
   readers_[hgcal::SlinkFileReader::kTrigIdOffset] =
       std::make_shared<hgcal::SlinkFileReader>(trig_inputs, hgcal::SlinkFileReader::kTrigIdOffset);
+  trig_num_blocks_ = pset.getUntrackedParameter<unsigned>("trig_num_blocks");
+  trig_scintillator_block_id_ = pset.getUntrackedParameter<unsigned>("trig_scintillator_block_id");
 }
 
 //
@@ -81,6 +83,8 @@ void HGCalSlinkFromRawSource::fillDescriptions(edm::ConfigurationDescriptions& d
   desc.addUntracked<std::vector<unsigned> >("fedIds",{0})->setComment("list of fedIds");
   desc.addUntracked<std::vector<std::string> >("inputs")->setComment("list of input files to use for DAQ");
   desc.addUntracked<std::vector<std::string> >("trig_inputs")->setComment("list of input files to use for TRIG");
+  desc.addUntracked<unsigned>("trig_num_blocks", 6)->setComment("number of TDAQ blocks in the TRIG link");
+  desc.addUntracked<unsigned>("trig_scintillator_block_id", 5)->setComment("index of the TDAQ block with scintillator TRIG info");
   desc.setAllowAnything();
   descriptions.add("source", desc);
 }
@@ -211,7 +215,7 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
       // find the trigger event matched to the first DAQ slink
       if (rTrgEvent->slinkBoe()->eventId() == eventIdVal_ && rTrgEvent->slinkEoe()->bxId() == bxIdVal_ &&
           rTrgEvent->slinkEoe()->orbitId() == orbitIdVal_) {
-        reader->readTriggerData(*metaData_, rTrgEvent);
+        reader->readTriggerData(*metaData_, rTrgEvent, trig_num_blocks_, trig_scintillator_block_id_);
         break;
       } else {
         edm::LogError("SlinkFromRaw") << "Mismatch in E/B/O counters for the trigger link"
