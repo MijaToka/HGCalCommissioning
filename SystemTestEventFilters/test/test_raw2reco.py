@@ -13,7 +13,7 @@ datadir = os.path.join(os.environ.get('CMSSW_BASE',''),"src/HGCalCommissioning/L
 from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
 # input options (BIN -> RAW):
-options.register('runNumber', 1695762407, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+options.register('runNumber', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "run number")
 options.register('maxEventsPerLumiSection', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Break in lumi sections using this event count")
@@ -29,7 +29,7 @@ options.register('inputTrigFiles', '',
 # geometry options:
 options.register('geometry', 'Extended2026D94', VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  'geometry to use')
-options.register('modules',"HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_B27v1.txt",mytype=VarParsing.varType.string,
+options.register('modules',"HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt",mytype=VarParsing.varType.string,
                  info="Path to module mapper. Absolute, or relative to CMSSW src directory")
 options.register('sicells','Geometry/HGCalMapping/data/CellMaps/WaferCellMapTraces.txt',mytype=VarParsing.varType.string,
                  info="Path to Si cell mapper. Absolute, or relative to CMSSW src directory")
@@ -47,11 +47,11 @@ options.register('econdHeaderMarker', -1, VarParsing.multiplicity.singleton, Var
 options.register('mismatchPassthrough', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
 # module calibration & configurations:
-options.register('fedconfig',f"{datadir}/config_feds_B27v1.json",mytype=VarParsing.varType.string,
+options.register('fedconfig',f"{datadir}/config_feds_TB2024v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
-options.register('modconfig',f"{datadir}/config_econds_B27v1.json",mytype=VarParsing.varType.string,
+options.register('modconfig',f"{datadir}/config_econds_TB2024v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
-options.register('params',f"{datadir}/level0_calib_params_B27v1.json",mytype=VarParsing.varType.string,
+options.register('params',f"{datadir}/level0_calib_params_TB2024v1.json",mytype=VarParsing.varType.string,
                  info="Path to calibration parameters (JSON format)")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
@@ -75,15 +75,35 @@ options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.v
                  "debugging mode")
 options.parseArguments()
 
-# DEFAULTS
+# MAKE DEFAULTS
+import re, glob
+inputFiles = [ ] # cannot edit options.inputFiles
+for fname in options.inputFiles:
+  if '*' in fname: # expand glob wildcard and insert
+    inputFiles.extend(glob.glob(fname))
+  else:
+    inputFiles.append(fname)
+if options.runNumber==-1:
+  options.runNumber = 12345678 #1695762407
+  if inputFiles: # extract run number from filename
+    match = re.match(r".*Run(\d+)[^/]*\.bin$",inputFiles[0])
+    if match:
+      options.runNumber = int(match.group(1))
 if options.inputTrigFiles==[ ]: # default: use same as input files
-  import re
   trigexp = re.compile(r"(Run\d+)_Link(\d+)_(File\d+\.bin)$")
-  options.inputTrigFiles = [trigexp.sub(r"\1_Link0_\3",f) for f in options.inputFiles]
-print(f">>> fedIds:        {options.fedId!r}")
-print(f">>> Input files:   {options.inputFiles!r}")
+  for fname in inputFiles:
+    trigfname = trigexp.sub(r"\1_Link0_\3",fname)
+    options.inputTrigFiles.append(trigfname)
+    if not os.path.isfile(trigfname):
+      print(f"WARNING! Trigger file might not exist, or is not accessible? DAQ={fname}, trigger={trigfname}")
+
+# DEFAULTS
+print(f">>> Max events:    {options.maxEvents!r}")
+print(f">>> Run number:    {options.runNumber!r}")
+print(f">>> Input files:   {inputFiles!r}")
 print(f">>> Trigger files: {options.inputTrigFiles!r}")
 print(f">>> Output files:  {options.output!r}")
+print(f">>> fedIds:        {options.fedId!r}")
 print(f">>> Module map:    {options.modules!r}")
 print(f">>> SiCell map:    {options.sicells!r}")
 print(f">>> SipmCell map:  {options.sipmcells!r}")
@@ -123,8 +143,10 @@ process.source = cms.Source(
   maxEventsPerLumiSection=cms.untracked.int32(options.maxEventsPerLumiSection),
   useL1EventID=cms.untracked.bool(True),
   fedIds=cms.untracked.vuint32(*options.fedId),
-  inputs=cms.untracked.vstring(*options.inputFiles),
+  inputs=cms.untracked.vstring(*inputFiles),
   trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
+  ###trig_num_blocks=6;
+  ###trig_scintillator_block_id=5;
   ###trigSeparator=cms.untracked.uint32(options.trigSeparator),
 )
 process.rawDataCollector = cms.EDAlias(
@@ -158,25 +180,26 @@ process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configuration
 )
 
 # CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
-#print(">>> Prepare calibrations & configuration...")
-#process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
-#process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
-process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
-  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitConfigurationESProducer.cc
-  'hgcalrechit::HGCalConfigurationESProducer@alpaka',
-  gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration
-  #charMode=cms.int32(1),
-  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
-)
-process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
-  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
-  'hgcalrechit::HGCalCalibrationESProducer@alpaka',
-  filename=cms.string(options.params), # to be set up in configTBConditions
-  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
-  #configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
-  configSource=cms.ESInputTag(''),
-)
-#process.hgcalCalibParamESProducer.indexSource = process.hgcalConfigESProducer.indexSource
+if not options.dqmOnly:
+  #print(">>> Prepare calibrations & configuration...")
+  #process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
+  #process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
+  process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
+    # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitConfigurationESProducer.cc
+    'hgcalrechit::HGCalConfigurationESProducer@alpaka',
+    gain=cms.int32(1), # override to switch between 80, 160, 320 fC calibration
+    #charMode=cms.int32(1),
+    indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
+  )
+  process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
+    # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
+    'hgcalrechit::HGCalCalibrationESProducer@alpaka',
+    filename=cms.string(options.params), # to be set up in configTBConditions
+    indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
+    #configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
+    configSource=cms.ESInputTag(''),
+  )
+  #process.hgcalCalibParamESProducer.indexSource = process.hgcalConfigESProducer.indexSource
 
 # RAW -> DIGI producer
 # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/EventFilter/HGCalRawToDigi/plugins/HGCalRawToDigi.cc
@@ -192,30 +215,31 @@ process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
 #process.hgCalEmptyEventFilter.fedIds = process.hgcalDigis.fedIds
 
 # DIGI -> RECO producer
-# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
-#print(">>> Prepare DIGI -> RECO...")
-process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
-process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
-if options.gpu:
-  process.hgcalRecHits = cms.EDProducer(
-    'alpaka_cuda_async::HGCalRecHitsProducer',
-    digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
-    calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
-    configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
-    n_hits_scale=cms.int32(1),
-    n_blocks=cms.int32(4096),
-    n_threads=cms.int32(1024)
-  )
-else:
-  process.hgcalRecHits = cms.EDProducer(
-    'alpaka_serial_sync::HGCalRecHitsProducer',
-    digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
-    calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
-    configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
-    n_hits_scale=cms.int32(1),
-    n_blocks=cms.int32(1024),
-    n_threads=cms.int32(4096)
-  )
+if not options.dqmOnly:
+  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
+  #print(">>> Prepare DIGI -> RECO...")
+  process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
+  process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
+  if options.gpu:
+    process.hgcalRecHits = cms.EDProducer(
+      'alpaka_cuda_async::HGCalRecHitsProducer',
+      digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+      calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
+      configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
+      n_hits_scale=cms.int32(1),
+      n_blocks=cms.int32(4096),
+      n_threads=cms.int32(1024)
+    )
+  else:
+    process.hgcalRecHits = cms.EDProducer(
+      'alpaka_serial_sync::HGCalRecHitsProducer',
+      digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+      calibSource=cms.ESInputTag('hgcalCalibParamESProducer', ''),
+      configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
+      n_hits_scale=cms.int32(1),
+      n_blocks=cms.int32(1024),
+      n_threads=cms.int32(4096)
+    )
 
 # NANO producer (DIGI -> NANO, RECO -> NANO)
 process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
@@ -238,7 +262,7 @@ if options.dqmOnly:
   process.DQMStore = cms.Service("DQMStore")
   process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
   process.dqmSaver.tag = 'HGCAL'
-  process.dqmSaver.runNumber = 123456
+  process.dqmSaver.runNumber = options.runNumber #123456
   process.p = cms.Path(
     #*process.hgCalEmptyEventFilter    # FILTER empty events
     process.hgcalDigis                 # RAW -> DIGI
