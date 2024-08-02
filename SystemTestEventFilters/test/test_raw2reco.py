@@ -46,6 +46,8 @@ options.register('econdHeaderMarker', -1, VarParsing.multiplicity.singleton, Var
                  "Override begin of event marker for ECON-D (e.g. 0x154)")
 options.register('mismatchPassthrough', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Override ignore ECON-D packet mismatches") # patch unpacker behavior to deal with firmware known features
+options.register('charMode', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "Override characterization mode (-1: default from config YAML/JSON, 0: normal mode, 1: characterization mode)")
 # module calibration & configurations:
 options.register('fedconfig',f"{datadir}/config_feds_TB2024v1.json",mytype=VarParsing.varType.string,
                  info="Path to configuration (JSON format)")
@@ -73,16 +75,23 @@ options.register('storeOutput', True, VarParsing.multiplicity.singleton, VarPars
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
+options.register('debugModules', '*', VarParsing.multiplicity.list, VarParsing.varType.string,
+                 "debugging modules, default=['*']")
 options.parseArguments()
 
 # MAKE DEFAULTS
 import re, glob
 inputFiles = [ ] # cannot edit options.inputFiles
+outputFile = options.output # cannot edit options.output
 for fname in options.inputFiles:
   if '*' in fname: # expand glob wildcard and insert
     inputFiles.extend(glob.glob(fname))
   else:
+    if not os.path.isfile(fname):
+      print(f"WARNING! Input file file might not exist, or is not accessible? DAQ={fname}")
     inputFiles.append(fname)
+if os.path.isfile(outputFile):
+  print(f"WARNING! Output file already exists! You may need to remove it to prevent 'Fatal Root Error: @SUB=TStorageFactorySystem::Unlink'")
 if options.runNumber==-1:
   options.runNumber = 12345678 #1695762407
   if inputFiles: # extract run number from filename
@@ -96,13 +105,14 @@ if options.inputTrigFiles==[ ]: # default: use same as input files
     options.inputTrigFiles.append(trigfname)
     if not os.path.isfile(trigfname):
       print(f"WARNING! Trigger file might not exist, or is not accessible? DAQ={fname}, trigger={trigfname}")
+outputFile = outputFile.replace("_RunRUN",f"_Run{options.runNumber:010d}") # fill placeholder
 
 # DEFAULTS
 print(f">>> Max events:    {options.maxEvents!r}")
 print(f">>> Run number:    {options.runNumber!r}")
 print(f">>> Input files:   {inputFiles!r}")
 print(f">>> Trigger files: {options.inputTrigFiles!r}")
-print(f">>> Output files:  {options.output!r}")
+print(f">>> Output files:  {outputFile!r}")
 print(f">>> fedIds:        {options.fedId!r}")
 print(f">>> Module map:    {options.modules!r}")
 print(f">>> SiCell map:    {options.sicells!r}")
@@ -171,11 +181,11 @@ process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configuration
   'HGCalConfigurationESProducer',
   fedjson=cms.string(options.fedconfig), # JSON with FED configuration parameters
   modjson=cms.string(options.modconfig), # JSON with ECON-D configuration parameters
-  bePassthroughMode=cms.int32(options.mismatchPassthrough), # override: ignore mismatch
+  bePassthroughMode=cms.int32(options.mismatchPassthrough), # override: ignore ECON-D packet mismatches
   cbHeaderMarker=cms.int32(options.cbHeaderMarker),         # override: capture block header marker
   slinkHeaderMarker=cms.int32(options.slinkHeaderMarker),   # override: S-link header marker
   econdHeaderMarker=cms.int32(options.econdHeaderMarker),   # override: ECON-D header marker
-  charMode=cms.int32(1),                                    # override: characterization mode
+  charMode=cms.int32(options.charMode),                     # override: characterization mode
   indexSource=cms.ESInputTag('hgCalMappingESProducer','')
 )
 
@@ -188,7 +198,7 @@ if not options.dqmOnly:
     # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitConfigurationESProducer.cc
     'hgcalrechit::HGCalConfigurationESProducer@alpaka',
     gain=cms.int32(1), # override to switch between 80, 160, 320 fC calibration
-    #charMode=cms.int32(1),
+    #charMode=cms.int32(options.charMode),
     indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
   )
   process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
@@ -297,7 +307,7 @@ process.outpath = cms.EndPath()
 if options.storeOutput:
   process.output = cms.OutputModule(
     "PoolOutputModule",
-    fileName=cms.untracked.string(options.output),
+    fileName=cms.untracked.string(outputFile),
     outputCommands=cms.untracked.vstring(
         'drop *',
         'keep HGCalTestSystemMetaData_*_*_*',
@@ -314,10 +324,11 @@ if options.storeOutput:
 if options.storeRAWOutput:
   process.outputRAW = cms.OutputModule(
     "FRDOutputModule",
-    fileName=cms.untracked.string(options.output),
+    fileName=cms.untracked.string(outputFile),
     source=cms.InputTag('rawDataCollector'),
     frdVersion=cms.untracked.uint32(6),
     frdFileVersion=cms.untracked.uint32(1),
   )
   process.outpath += process.outputRAW
-  
+
+print(">>> Run process...")
