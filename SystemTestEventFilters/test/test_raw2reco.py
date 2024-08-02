@@ -59,7 +59,7 @@ options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.var
                  "run on GPUs")
 # nano options:
 options.register('skipDigi', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "skip Digis for flat table")
+                 "skip Digis for flat NANO table")
 # DQM options (DIGI -> DQM):
 options.register('prescale', 1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "prescale for DQM (to reduce amount of output data)")
@@ -120,6 +120,7 @@ print(f">>> Module map:    {options.modules!r}")
 print(f">>> SiCell map:    {options.sicells!r}")
 print(f">>> SipmCell map:  {options.sipmcells!r}")
 print(f">>> Calib params:  {options.params!r}")
+#print(f">>> dqmOnly={options.dqmOnly!r}, skipDigi={options.skipDigi!r}")
 
 # PROCESS
 from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2
@@ -178,8 +179,8 @@ process = customise_hgcalmapper(process,
                                 sipmcells=options.sipmcells)
 
 # GLOBAL HGCAL CONFIGURATION (mostly for unpacker)
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/HGCalConfigurationESProducer.cc
 process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
-  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/HGCalConfigurationESProducer.cc
   'HGCalConfigurationESProducer',
   fedjson=cms.string(options.fedconfig), # JSON with FED configuration parameters
   modjson=cms.string(options.modconfig), # JSON with ECON-D configuration parameters
@@ -192,19 +193,19 @@ process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configuration
 )
 
 # CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitConfigurationESProducer.cc
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
 if not options.dqmOnly:
   #print(">>> Prepare calibrations & configuration...")
   #process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
   #process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
   process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
-    # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitConfigurationESProducer.cc
     'hgcalrechit::HGCalConfigurationESProducer@alpaka',
     gain=cms.int32(1), # override to switch between 80, 160, 320 fC calibration
     #charMode=cms.int32(options.charMode),
     indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
   )
   process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
-    # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitCalibrationESProducer.cc
     'hgcalrechit::HGCalCalibrationESProducer@alpaka',
     filename=cms.string(options.params), # to be set up in configTBConditions
     indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
@@ -227,8 +228,8 @@ process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
 #process.hgCalEmptyEventFilter.fedIds = process.hgcalDigis.fedIds
 
 # DIGI -> RECO producer
+# https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
 if not options.dqmOnly:
-  # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
   #print(">>> Prepare DIGI -> RECO...")
   process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
   process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
@@ -254,14 +255,17 @@ if not options.dqmOnly:
     )
 
 # NANO producer (DIGI -> NANO, RECO -> NANO)
-process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
-process.hgcalNanoFlatTable = cms.EDProducer(
-  # https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/NanoTools/plugins/HGCalNanoTableProducer.cc
-  'HGCalNanoTableProducer',
-  digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
-  rechits=cms.InputTag('hgcalRecHits', '', 'RAW2RECO'),
-  skipDigi=cms.bool(options.skipDigi)
-)
+# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/NanoTools/plugins/HGCalNanoTableProducer.cc
+if not (options.skipDigi and options.dqmOnly):
+  #print(">>> Prepare DIGI/RECO -> NANO...")
+  process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
+  process.hgcalNanoFlatTable = cms.EDProducer(
+    'HGCalNanoTableProducer',
+    digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
+    rechits=cms.InputTag('hgcalRecHits', '', 'RAW2RECO'),
+    skipDigi=cms.bool(options.skipDigi),
+    skipRecHits=cms.bool(options.dqmOnly) # skip DIGI -> RECO for DQM only
+  )
 
 # DEFINE PROCESSES: RAW -> DIGI -> DQM only
 # https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/DQM/plugins/HGCalSysValDigisClient.cc
@@ -270,18 +274,20 @@ if options.dqmOnly:
   print(">>> Prepare RAW -> DIGI -> DQM processes...")
   process.load('HGCalCommissioning.DQM.hgCalSysValDigisClient_cfi')
   process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
+  process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
   process.hgCalSysValDigisClient.PrescaleFactor = options.prescale
   process.DQMStore = cms.Service("DQMStore")
-  process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
   process.dqmSaver.tag = 'HGCAL'
-  process.dqmSaver.runNumber = options.runNumber #123456
+  process.dqmSaver.runNumber = options.runNumber
   process.p = cms.Path(
     #*process.hgCalEmptyEventFilter    # FILTER empty events
     process.hgcalDigis                 # RAW -> DIGI
     *process.hgCalSysValDigisClient    # DIGI -> DQM
-    *process.hgCalSysValDigisHarvester
-    *process.dqmSaver
+    *process.hgCalSysValDigisHarvester # harvest all histograms
+    *process.dqmSaver                  # store to DQM_V*_HGCAL_R$RUNNUMBER.root file
   )
+  if not options.skipDigi:
+    process.p *= process.hgcalNanoFlatTable # DIGI -> NANO (flat table)
 
 # DEFINE PROCESSES: full RAW -> DIGI -> RECO -> NANO
 else:

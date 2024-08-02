@@ -81,9 +81,9 @@ void TestHGCalRawToDigi::endRun(edm::Run const& iRun, edm::EventSetup const& iSe
   }
   std::cout << std::endl;
   for (unsigned fedId = 0; fedId < moduleIndexer_.nfeds_; ++fedId) {
-    const auto econdMax = moduleIndexer_.fedReadoutSequences_[fedId].readoutTypes_.size();
+    const auto econdMax = moduleIndexer_.getMaxModuleSize(fedId);
     for (uint32_t econdIdx = 0; econdIdx < econdMax; econdIdx++) {
-      const auto erxMax = moduleIndexer_.globalTypesNErx_[moduleIndexer_.fedReadoutSequences_[fedId].readoutTypes_[econdIdx]]; //moduleIndexer_.getMaxERxSize(fedId,globalECONDIdx);
+      const auto erxMax = moduleIndexer_.getMaxERxSize(fedId,econdIdx);
       for (uint32_t erxIdx = 0; erxIdx < erxMax; erxIdx++) {
         uint32_t eRxDenseIdx = moduleIndexer_.getIndexForModuleErx(fedId, econdIdx, erxIdx);
         std::cout << std::setw(5) << fedId << std::setw(6) << econdIdx << std::setw(5) << erxIdx << " |";
@@ -115,10 +115,10 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
   // CHECK DIGIs
   for (unsigned fedId = 0; fedId < moduleIndexer_.nfeds_; ++fedId) {
     //std::cout << "fed=" << fedId << std::endl;
-    const auto econdMax = moduleIndexer_.fedReadoutSequences_[fedId].readoutTypes_.size();
+    const auto econdMax = moduleIndexer_.getMaxModuleSize(fedId);
     for (uint32_t econdIdx = 0; econdIdx < econdMax; econdIdx++) {
       //std::cout << "fed=" << fedId << ", econdIdx=" << econdIdx << std::endl;
-      const auto erxMax = moduleIndexer_.globalTypesNErx_[moduleIndexer_.fedReadoutSequences_[fedId].readoutTypes_[econdIdx]]; //moduleIndexer_.getMaxERxSize(fedId,econdIdx);
+      const auto erxMax = moduleIndexer_.getMaxERxSize(fedId,econdIdx);
       std::cout << "   fed econd   eRx  chan |  tctp adcm1   adc   tot   toa  flags" << std::endl;
       for (uint32_t erxIdx = 0; erxIdx < erxMax; erxIdx++) {
         uint32_t eRxDenseIdx = moduleIndexer_.getIndexForModuleErx(fedId, econdIdx, erxIdx);

@@ -8,6 +8,7 @@
 
 #include "DataFormats/HGCalDigi/interface/HGCalDigiHost.h"
 #include "DataFormats/HGCalDigi/interface/HGCalFlaggedECONDInfo.h"
+#include "DataFormats/HGCalDigi/interface/HGCalRawDataDefinitions.h"
 
 #include "CondFormats/DataRecord/interface/HGCalDenseIndexInfoRcd.h"
 #include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
@@ -171,10 +172,12 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
     double toa = digi.toa();
     double adcm = digi.adcm1();
     double cmsum = digi.cm();
+    uint16_t flags = digi.flags();
     double deltaadc = adc-adcm;
     
     //NOTE: Probably should check that flags==0
     //and have an histogram for flags!=0 ?
+    if(flags==hgcal::DIGI_FLAG::NotAvailable) continue; // quick quality check for TB2024
     if(adc<0 && tot<0) continue;
 
     //start channel sums (this will be further corrected down depending on the availability
