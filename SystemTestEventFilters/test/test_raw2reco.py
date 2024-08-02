@@ -72,6 +72,8 @@ options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, Var
                  "also store the RAW output into a streamer file")
 options.register('storeOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also store the output into an EDM file")
+options.register('storeNANOOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also store the flat NANOAOD file")
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
@@ -314,11 +316,27 @@ if options.storeOutput:
         'keep FEDRawDataCollection_*_*_*',
         'keep *SoA*_hgcalDigis_*_*',
         'keep *SoA*_hgcalRecHits_*_*',
-        'keep *_hgcalNanoFlatTable_*_*'
     ),
     #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
   )
   process.outpath += process.output
+
+# NANOAOD
+if options.storeNANOOutput:
+  process.NANOAODoutput = cms.OutputModule("NanoAODOutputModule",
+      compressionAlgorithm = cms.untracked.string('LZMA'),
+      compressionLevel = cms.untracked.int32(9),
+      dataset = cms.untracked.PSet(
+          dataTier = cms.untracked.string('NANOAOD'),
+          filterName = cms.untracked.string('')
+      ),
+      fileName = cms.untracked.string('nano_' + outputFile),
+      outputCommands=cms.untracked.vstring(
+          'drop *',
+          "keep nanoaodFlatTable_*Table_*_*",
+      )
+  )
+  process.outpath += process.NANOAODoutput
 
 # RAW OUTPUT
 if options.storeRAWOutput:
