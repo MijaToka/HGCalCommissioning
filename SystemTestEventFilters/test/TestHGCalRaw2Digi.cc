@@ -119,7 +119,7 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
     for (uint32_t econdIdx = 0; econdIdx < econdMax; econdIdx++) {
       //std::cout << "fed=" << fedId << ", econdIdx=" << econdIdx << std::endl;
       const auto erxMax = moduleIndexer_.getMaxERxSize(fedId,econdIdx);
-      std::cout << "   fed econd   eRx  chan |  tctp adcm1   adc   tot   toa  flags" << std::endl;
+      std::cout << "   fed econd   eRx  chan |  tctp adcm1   adc   tot   toa    cm  flags" << std::endl;
       for (uint32_t erxIdx = 0; erxIdx < erxMax; erxIdx++) {
         uint32_t eRxDenseIdx = moduleIndexer_.getIndexForModuleErx(fedId, econdIdx, erxIdx);
         std::cout << "   erxIdx=" << erxIdx << ", eRxDenseIdx=" << eRxDenseIdx << std::endl;
@@ -137,7 +137,8 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
                     << std::setw(6) << erxIdx << std::setw(6) << channelIdx << " |"
                     << std::setw(6) << (uint32_t) digis.view()[denseIdx].tctp()
                     << std::setw(6) << digis.view()[denseIdx].adcm1() << std::setw(6) << digis.view()[denseIdx].adc()
-                    << std::setw(6) << digis.view()[denseIdx].tot()  << std::setw(6) << digis.view()[denseIdx].toa() 
+                    << std::setw(6) << digis.view()[denseIdx].tot()   << std::setw(6) << digis.view()[denseIdx].toa() 
+                    << std::setw(6) << digis.view()[denseIdx].cm()
                     << " 0x" << std::hex << std::setfill('0') << std::setw(4) << digis.view()[denseIdx].flags()
                     << std::dec << std::setfill(' ') << std::endl;
         }

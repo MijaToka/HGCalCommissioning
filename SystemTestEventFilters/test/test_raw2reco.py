@@ -68,12 +68,12 @@ options.register('dqmOnly', False, VarParsing.multiplicity.singleton, VarParsing
 # output options:
 options.register('dumpFRD', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also dump the FEDRawData content")
-options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
-                 "also store the RAW output into a streamer file")
 options.register('storeOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also store the output into an EDM file")
 options.register('storeNANOOutput', True, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "also store the flat NANOAOD file")
+options.register('storeRAWOutput', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "also store the RAW output into a streamer file")
 # verbosity options:
 options.register('debug', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "debugging mode")
@@ -108,13 +108,16 @@ if options.inputTrigFiles==[ ]: # default: use same as input files
     if not os.path.isfile(trigfname):
       print(f"WARNING! Trigger file might not exist, or is not accessible? DAQ={fname}, trigger={trigfname}")
 outputFile = outputFile.replace("_RunRUN",f"_Run{options.runNumber:010d}") # fill placeholder
+nanoOutputFile = os.path.join(os.path.dirname(outputFile),f"nano_{os.path.basename(outputFile)}")
+doNANO = not (options.skipDigi and options.dqmOnly)
 
 # DEFAULTS
 print(f">>> Max events:    {options.maxEvents!r}")
 print(f">>> Run number:    {options.runNumber!r}")
 print(f">>> Input files:   {inputFiles!r}")
 print(f">>> Trigger files: {options.inputTrigFiles!r}")
-print(f">>> Output files:  {outputFile!r}")
+print(f">>> Output file:   {outputFile!r}")
+print(f">>> NANO file:     {nanoOutputFile!r}")
 print(f">>> fedIds:        {options.fedId!r}")
 print(f">>> Module map:    {options.modules!r}")
 print(f">>> SiCell map:    {options.sicells!r}")
@@ -256,7 +259,7 @@ if not options.dqmOnly:
 
 # NANO producer (DIGI -> NANO, RECO -> NANO)
 # https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/NanoTools/plugins/HGCalNanoTableProducer.cc
-if not (options.skipDigi and options.dqmOnly):
+if doNANO:
   #print(">>> Prepare DIGI/RECO -> NANO...")
   process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
   process.hgcalNanoFlatTable = cms.EDProducer(
@@ -327,20 +330,20 @@ if options.storeOutput:
   )
   process.outpath += process.output
 
-# NANOAOD
-if options.storeNANOOutput:
+# NANOAOD OUTPUT
+if doNANO and options.storeNANOOutput:
   process.NANOAODoutput = cms.OutputModule("NanoAODOutputModule",
-      compressionAlgorithm = cms.untracked.string('LZMA'),
-      compressionLevel = cms.untracked.int32(9),
-      dataset = cms.untracked.PSet(
-          dataTier = cms.untracked.string('NANOAOD'),
-          filterName = cms.untracked.string('')
-      ),
-      fileName = cms.untracked.string('nano_' + outputFile),
-      outputCommands=cms.untracked.vstring(
-          'drop *',
-          "keep nanoaodFlatTable_*Table_*_*",
-      )
+    compressionAlgorithm = cms.untracked.string('LZMA'),
+    compressionLevel = cms.untracked.int32(9),
+    dataset = cms.untracked.PSet(
+      dataTier = cms.untracked.string('NANOAOD'),
+      filterName = cms.untracked.string('')
+    ),
+    fileName = cms.untracked.string(nanoOutputFile),
+    outputCommands=cms.untracked.vstring(
+      'drop *',
+      "keep nanoaodFlatTable_*Table_*_*",
+    )
   )
   process.outpath += process.NANOAODoutput
 
