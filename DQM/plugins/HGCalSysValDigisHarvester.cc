@@ -8,6 +8,9 @@
 #include <math.h>
 #include <map>
 
+#include <chrono>
+#include <ctime>
+
 //Framework
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
@@ -23,6 +26,7 @@
 
 #include "HGCalCommissioning/DQM/interface/HGCalSysValDQMCommon.h"
 
+#include <TDatime.h>
 #include <TString.h>
 #include <TFile.h>
 #include <TKey.h>
@@ -58,6 +62,8 @@ private:
   std::string templateDir_;
 
   //monitoring elements
+  MonitorElement *occupancyLayer_, *occupancyModule_, *meTimestamp_;
+  std::map<unsigned int, MonitorElement *> hexLayerPlots_;
   std::map<std::string, std::map<std::string, MonitorElement *> > hexPlots_;  
 };
 
@@ -94,6 +100,35 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
   for(int i=1; i<=xaxis->GetNbins(); i++)
     typecodes.push_back( xaxis->GetBinLabel(i) );
 
+  //define layer-level summary
+  ibooker.setCurrentFolder("HGCAL/Layers");
+  size_t nLayers = 26; // NOTE: place holder for CE-E layers. Only two layers in 2024 beam test
+  size_t nModules = typecodes.size();
+  occupancyLayer_ = ibooker.book1D("summary_occupancy_layer", ";Layer; #hits", nLayers, 0.5, nLayers+0.5);
+  occupancyModule_ = ibooker.book1D("summary_occupancy_module", ";Module; #hits", nModules, 0.5, nModules+0.5);
+  float total_nHits_layer = 0; // M0, M1, M2 in layer1; M3, M4, M5 in layer2
+  float total_nHits_module = 0; // nHits in each of six moodules
+
+  // Get current timestamp
+  auto now = std::chrono::system_clock::now();
+  std::time_t timestamp = std::chrono::system_clock::to_time_t(now);
+  TDatime dt(timestamp);
+  TString timeString = dt.AsSQLString();
+  std::cout << "Timestamp as TString: " << timeString.Data() << std::endl;
+  meTimestamp_ = ibooker.bookString("info_timestamp", timeString);
+
+  nLayers = 2;
+  for(size_t i=0; i<nLayers; i++) {
+    std::ostringstream ss, st;
+    ss << "_layer_" << i+1;
+    st << "Layer_" << i+1;
+    std::string tag(ss.str());
+    std::string title(st.str());
+
+    //define layer-level hex plots
+    hexLayerPlots_[i] = ibooker.book2DPoly("hex_occupancy"+tag,  title + "; x[cm]; y[cm];Occupancy", -50, 50, -50, 50);
+  }
+
   //book the hex summary plots
   ibooker.setCurrentFolder("HGCAL/Modules");
   for(size_t i=0; i<typecodes.size(); i++) {
@@ -103,6 +138,10 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
     std::ostringstream ss;
     ss << "_module_" << i;
     std::string tag(ss.str());
+
+    //set layer-level summary plots
+    auto binlabel = t.c_str();
+    occupancyModule_->setBinLabel(i+1, binlabel, 1);
 
     //define the hex plots
     hexPlots_[t]["avgcm"] = ibooker.book2DPoly("hex_avgcm"+tag,  t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::CMAVG), -14, 14, -14, 14);
@@ -114,6 +153,10 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
 
     //the sums histogram + helper functions to compute final quantities
     const MonitorElement *sum_me = igetter.get("HGCAL/Digis/sums" + tag);
+    auto num = [](SumIndices_t nidx, uint32_t chIdx, const MonitorElement *sum_me) -> float {
+      float n = sum_me->getBinContent(chIdx+1,nidx+1);
+      return n;
+    };
     auto mean = [](SumIndices_t vidx, SumIndices_t nidx, uint32_t chIdx, const MonitorElement *sum_me) -> float { 
       float n = sum_me->getBinContent(chIdx+1,nidx+1);
       float v = sum_me->getBinContent(chIdx+1,vidx+1);
@@ -130,7 +173,6 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
     std::string geourl = templateDir_ + "/geometry_" + t.substr(0,4) + "_wafer.root";
     edm::FileInPath fip(geourl);
     TFile *fgeo = new TFile(fip.fullPath().c_str(), "R");
-    TGraph *gr;
     TKey *key;
     TIter nextkey(fgeo->GetDirectory(nullptr)->GetListOfKeys());
     uint32_t iobj(0);
@@ -138,7 +180,7 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
 
       TObject *obj = key->ReadObj();
       if (!obj->InheritsFrom("TGraph")) continue;
-      gr = (TGraph *)obj;
+      TGraph *gr = (TGraph *)obj;
 
       //skip CM channels
       bool isCM = (iobj % 39 == 37) || (iobj % 39 == 38);
@@ -150,6 +192,10 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
       //compute summary for this standard channel
       unsigned eRx = int(iobj/39); //NOTE: CM channels were included in the objects
       unsigned chIdx = iobj - eRx*2;
+
+      float nHits = num(SumIndices_t::NADC, chIdx, sum_me) + num(SumIndices_t::NTOT, chIdx, sum_me);
+      total_nHits_layer += nHits;
+      total_nHits_module += nHits;
 
       float avgcm = mean( SumIndices_t::SUMCM, SumIndices_t::NCM, chIdx, sum_me);
       hexPlots_[t]["avgcm"]->addBin(gr);
@@ -181,7 +227,36 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
     //close template file
     fgeo->Close();
 
+    //fill layer information
+    occupancyModule_->setBinContent(i+1, total_nHits_module);
+    total_nHits_module = 0.;
+    if((i+1)%3==0) {
+        occupancyLayer_->setBinContent((i+1)/3, total_nHits_layer);
+        total_nHits_layer = 0.;
+    }
   }//end loop over typecodes of this run
+
+  //register layer-level geometry & fill bin contents
+  unsigned int nModulesPerLayer=3;
+  unsigned int layerModuleIdx=0;
+  std::string geourl0 = templateDir_ + "/geometry_TB2024_wafers.root";
+  edm::FileInPath fip0(geourl0);
+  TFile *fgeo0 = new TFile(fip0.fullPath().c_str(), "R");
+  TKey *key0;
+  TIter nextkey0(fgeo0->GetDirectory(nullptr)->GetListOfKeys());
+  while ((key0 = (TKey *)nextkey0())) {
+    TObject *obj = key0->ReadObj();
+    if (!obj->InheritsFrom("TGraph")) continue;
+    TGraph *gr = (TGraph *)obj;
+    for(size_t i=0; i<nLayers; i++) {
+        int moduleIdx = nModulesPerLayer*i + layerModuleIdx;
+        total_nHits_module = occupancyModule_->getBinContent(moduleIdx+1);
+        hexLayerPlots_[i]->addBin(gr);
+        hexLayerPlots_[i]->setBinContent(layerModuleIdx+1,total_nHits_module);
+    }
+    layerModuleIdx+=1;
+  }
+  fgeo0->Close();
 
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
 }

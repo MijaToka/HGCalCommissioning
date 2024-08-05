@@ -179,6 +179,7 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
     //and have an histogram for flags!=0 ?
     if(flags==hgcal::DIGI_FLAG::NotAvailable) continue; // quick quality check for TB2024
     if(adc<0 && tot<0) continue;
+    if(digi.flags()==hgcal::DIGI_FLAG::NotAvailable) continue;
 
     //start channel sums (this will be further corrected down depending on the availability
     std::vector<double> tosum(SumIndices_t::LASTINDEX,0);
@@ -315,7 +316,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
       uint32_t imod = it.second.second;
 
       MonitoredElement_t ele;
-      ele.dqmIndex = followedModules_.size();
+      ele.dqmIndex = moduleIndexer.getIndexForModule(fedid, imod);
       ele.typecode=typecode;
       auto modtype_val = moduleIndexer.fedReadoutSequences_[fedid].readoutTypes_[imod];
       ele.nErx=moduleIndexer.globalTypesNErx_[modtype_val]; 
@@ -354,6 +355,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
 
   size_t xbin(0);
   for(auto it : followedModules_) {
+    xbin = it.second.dqmIndex;
     xbin++;
 
     //label the econ-D histograms with typecodes
@@ -390,7 +392,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
         "seedtoavstrigtime" + tag, typecode + ";trigger phase; TOA of channel with max <ADC-ADC_{-1}>", 200, 0, 200, 100, 0, 1024);
     
     //sums will be used bt the harvester
-    moduleHistos_["sums"][k] = ibook.book2D("sums" + tag, typecode + ";Channel;", nch-0.5, 0, nch-0.5, SumIndices_t::LASTINDEX,0,SumIndices_t::LASTINDEX);
+    moduleHistos_["sums"][k] = ibook.book2D("sums" + tag, typecode + ";Channel;", nch, 0, nch, SumIndices_t::LASTINDEX,0,SumIndices_t::LASTINDEX);
     for(size_t i=0; i<SumIndices_t::LASTINDEX; i++) {
       std::string label = getLabelForSumIndex(SumIndices_t(i));
       moduleHistos_["sums"][k]->setBinLabel(i+1, label, 2);
