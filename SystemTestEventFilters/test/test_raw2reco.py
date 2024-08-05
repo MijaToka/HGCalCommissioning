@@ -101,15 +101,15 @@ if options.runNumber==-1:
     if match:
       options.runNumber = int(match.group(1))
 if options.inputTrigFiles==[ ]: # default: use same as input files
-  trigexp = re.compile(r"(Run\d+)_Link(\d+)_(File\d+\.bin)$")
+  trigexp = re.compile(r"(Run\d+)_Link(\d+)_(File\d+\.bin)$") # look for _LinkX_
   for fname in inputFiles:
-    trigfname = trigexp.sub(r"\1_Link0_\3",fname)
+    trigfname = trigexp.sub(r"\1_Link0_\3",fname) # replace _LinkX_ -> _Link0_
     options.inputTrigFiles.append(trigfname)
     if not os.path.isfile(trigfname):
       print(f"WARNING! Trigger file might not exist, or is not accessible? DAQ={fname}, trigger={trigfname}")
 outputFile = outputFile.replace("_RunRUN",f"_Run{options.runNumber:010d}") # fill placeholder
 nanoOutputFile = os.path.join(os.path.dirname(outputFile),f"nano_{os.path.basename(outputFile)}")
-doNANO = not (options.skipDigi and options.dqmOnly)
+doNANO = options.storeNANOOutput and not (options.skipDigi and options.dqmOnly)
 
 # DEFAULTS
 print(f">>> Max events:    {options.maxEvents!r}")
@@ -123,7 +123,7 @@ print(f">>> Module map:    {options.modules!r}")
 print(f">>> SiCell map:    {options.sicells!r}")
 print(f">>> SipmCell map:  {options.sipmcells!r}")
 print(f">>> Calib params:  {options.params!r}")
-#print(f">>> dqmOnly={options.dqmOnly!r}, skipDigi={options.skipDigi!r}")
+#print(f">>> dqmOnly={options.dqmOnly!r}, skipDigi={options.skipDigi!r}, doNANO={doNANO!r}")
 
 # PROCESS
 from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2
@@ -152,7 +152,7 @@ process.options.wantSummary = cms.untracked.bool(True)
 #print(">>> Prepare inputs...")
 process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEvents))
 process.source = cms.Source(
-  "HGCalSlinkFromRawSource",
+  'HGCalSlinkFromRawSource',
   isRealData=cms.untracked.bool(True),
   runNumber=cms.untracked.uint32(options.runNumber),
   firstLumiSection=cms.untracked.uint32(1),
@@ -230,9 +230,22 @@ process.hgcalDigis.fedIds = cms.vuint32(*options.fedId)
 #process.hgCalEmptyEventFilter.src = process.hgcalDigis.src
 #process.hgCalEmptyEventFilter.fedIds = process.hgcalDigis.fedIds
 
+# DIGI -> DQM
+# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/DQM/plugins/HGCalSysValDigisClient.cc
+# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/DQM/plugins/HGCalSysValDigisHarvester.cc
+if options.dqmOnly:
+  process.load('HGCalCommissioning.DQM.hgCalSysValDigisClient_cfi')
+  process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
+  process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
+  process.hgCalSysValDigisClient.PrescaleFactor = options.prescale
+  #process.hgCalSysValDigisClient.MetaData = cms.InputTag('rawMetaDataCollector'),
+  process.DQMStore = cms.Service("DQMStore")
+  process.dqmSaver.tag = 'HGCAL'
+  process.dqmSaver.runNumber = options.runNumber
+
 # DIGI -> RECO producer
 # https://github.com/CMS-HGCAL/cmssw/blob/dev/hackathon_base_CMSSW_14_1_X/RecoLocalCalo/HGCalRecAlgos/plugins/alpaka/HGCalRecHitsProducer.cc
-if not options.dqmOnly:
+else:
   #print(">>> Prepare DIGI -> RECO...")
   process.load('HeterogeneousCore.AlpakaCore.ProcessAcceleratorAlpaka_cfi')
   process.load('HeterogeneousCore.CUDACore.ProcessAcceleratorCUDA_cfi')
@@ -259,29 +272,26 @@ if not options.dqmOnly:
 
 # NANO producer (DIGI -> NANO, RECO -> NANO)
 # https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/NanoTools/plugins/HGCalNanoTableProducer.cc
+# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/NanoTools/plugins/HGCalRunFEDReadoutSequence.cc
 if doNANO:
   #print(">>> Prepare DIGI/RECO -> NANO...")
   process.load('HGCalCommissioning.NanoTools.hgCalNanoTableProducer_cfi')
+  process.load('HGCalCommissioning.NanoTools.hgCalRunFEDReadoutSequence_cfi')
   process.hgcalNanoFlatTable = cms.EDProducer(
     'HGCalNanoTableProducer',
+    metadata=cms.InputTag('rawMetaDataCollector', ''), #, 'LHC'),
     digis=cms.InputTag('hgcalDigis', '', 'RAW2RECO'),
     rechits=cms.InputTag('hgcalRecHits', '', 'RAW2RECO'),
     skipDigi=cms.bool(options.skipDigi),
     skipRecHits=cms.bool(options.dqmOnly) # skip DIGI -> RECO for DQM only
   )
+  process.hgcalNanoRunFlatTable = cms.EDProducer(
+    'HGCalRunFEDReadoutSequence', # Run tables
+  )
 
-# DEFINE PROCESSES: RAW -> DIGI -> DQM only
-# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/DQM/plugins/HGCalSysValDigisClient.cc
-# https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/blob/master/DQM/plugins/HGCalSysValDigisHarvester.cc
-if options.dqmOnly:
-  print(">>> Prepare RAW -> DIGI -> DQM processes...")
-  process.load('HGCalCommissioning.DQM.hgCalSysValDigisClient_cfi')
-  process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
-  process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
-  process.hgCalSysValDigisClient.PrescaleFactor = options.prescale
-  process.DQMStore = cms.Service("DQMStore")
-  process.dqmSaver.tag = 'HGCAL'
-  process.dqmSaver.runNumber = options.runNumber
+# DEFINE PROCESSES:
+if options.dqmOnly: # RAW -> DIGI -> DQM only
+  print(">>> Prepare RAW -> DIGI -> DQM process...")
   process.p = cms.Path(
     #*process.hgCalEmptyEventFilter    # FILTER empty events
     process.hgcalDigis                 # RAW -> DIGI
@@ -289,24 +299,21 @@ if options.dqmOnly:
     *process.hgCalSysValDigisHarvester # harvest all histograms
     *process.dqmSaver                  # store to DQM_V*_HGCAL_R$RUNNUMBER.root file
   )
-  if not options.skipDigi:
-    process.p *= process.hgcalNanoFlatTable # DIGI -> NANO (flat table)
-
-# DEFINE PROCESSES: full RAW -> DIGI -> RECO -> NANO
-else:
-  print(">>> Prepare RAW -> DIGI -> RECO -> NANO process...")
+else: # RAW -> DIGI -> RECO
+  print(">>> Prepare RAW -> DIGI -> RECO process...")
   process.p = cms.Path(
-    #*process.hgCalEmptyEventFilter       # FILTER empty events
-    process.hgcalDigis                    # RAW -> DIGI
-    *process.hgcalRecHits                 # DIGI -> RECO (RecHit calibrations)
-    *process.hgcalNanoFlatTable           # DIGI/RECO -> NANO (flat table)
-    #*process.hgCalRecHitsFromSoAproducer  # RECO -> NANO Phase I format translator
+    #*process.hgCalEmptyEventFilter # FILTER empty events
+    process.hgcalDigis              # RAW -> DIGI
+    *process.hgcalRecHits           # DIGI -> RECO (RecHit calibrations)
   )
+if doNANO: # DIGI/RECO -> NANO
+  process.p *= process.hgcalNanoFlatTable # DIGI -> NANO (flat table)
+  process.p *= process.hgcalNanoRunFlatTable # run SoA -> NANO (flat run table)
 
 # DUMP FED
 if options.dumpFRD:
   process.dump = cms.EDAnalyzer(
-    "DumpFEDRawDataProduct",
+    'DumpFEDRawDataProduct',
     label=cms.untracked.InputTag('rawDataCollector'),
     feds=cms.untracked.vint32(*options.fedId),
     dumpPayload=cms.untracked.bool(True)
@@ -317,31 +324,32 @@ if options.dumpFRD:
 process.outpath = cms.EndPath()
 if options.storeOutput:
   process.output = cms.OutputModule(
-    "PoolOutputModule",
+    'PoolOutputModule',
     fileName=cms.untracked.string(outputFile),
     outputCommands=cms.untracked.vstring(
-        'drop *',
-        'keep HGCalTestSystemMetaData_*_*_*',
-        'keep FEDRawDataCollection_*_*_*',
-        'keep *SoA*_hgcalDigis_*_*',
-        'keep *SoA*_hgcalRecHits_*_*',
+      "drop *",
+      "keep HGCalTestSystemMetaData_*_*_*",
+      "keep FEDRawDataCollection_*_*_*",
+      "keep *SoA*_hgcalDigis_*_*",
+      "keep *SoA*_hgcalRecHits_*_*",
     ),
     #SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
   )
   process.outpath += process.output
 
 # NANOAOD OUTPUT
-if doNANO and options.storeNANOOutput:
-  process.NANOAODoutput = cms.OutputModule("NanoAODOutputModule",
-    compressionAlgorithm = cms.untracked.string('LZMA'),
-    compressionLevel = cms.untracked.int32(9),
-    dataset = cms.untracked.PSet(
-      dataTier = cms.untracked.string('NANOAOD'),
-      filterName = cms.untracked.string('')
+if doNANO:
+  process.NANOAODoutput = cms.OutputModule(
+    'NanoAODOutputModule',
+    compressionAlgorithm=cms.untracked.string('LZMA'),
+    compressionLevel=cms.untracked.int32(9),
+    dataset=cms.untracked.PSet(
+      dataTier=cms.untracked.string('NANOAOD'),
+      filterName=cms.untracked.string('')
     ),
-    fileName = cms.untracked.string(nanoOutputFile),
+    fileName=cms.untracked.string(nanoOutputFile),
     outputCommands=cms.untracked.vstring(
-      'drop *',
+      "drop *",
       "keep nanoaodFlatTable_*Table_*_*",
     )
   )
@@ -350,7 +358,7 @@ if doNANO and options.storeNANOOutput:
 # RAW OUTPUT
 if options.storeRAWOutput:
   process.outputRAW = cms.OutputModule(
-    "FRDOutputModule",
+    'FRDOutputModule',
     fileName=cms.untracked.string(outputFile),
     source=cms.InputTag('rawDataCollector'),
     frdVersion=cms.untracked.uint32(6),
