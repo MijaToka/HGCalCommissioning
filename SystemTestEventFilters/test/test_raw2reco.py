@@ -86,14 +86,15 @@ import re, glob
 inputFiles = [ ] # cannot edit options.inputFiles
 outputFile = options.output # cannot edit options.output
 for fname in options.inputFiles:
-  if '*' in fname: # expand glob wildcard and insert
-    inputFiles.extend(glob.glob(fname))
+  if any(c in fname for c in '[*?'): # expand glob wildcard and insert
+    matches = glob.glob(fname)
+    if not matches:
+      print(f"WARNING! Found no input files for glob pattern {fname!r}...")
+    inputFiles.extend(matches)
   else:
     if not os.path.isfile(fname):
       print(f"WARNING! Input file file might not exist, or is not accessible? DAQ={fname}")
     inputFiles.append(fname)
-if os.path.isfile(outputFile):
-  print(f"WARNING! Output file already exists! You may need to remove it to prevent 'Fatal Root Error: @SUB=TStorageFactorySystem::Unlink'")
 if options.runNumber==-1:
   options.runNumber = 12345678 #1695762407
   if inputFiles: # extract run number from filename
@@ -110,6 +111,8 @@ if options.inputTrigFiles==[ ]: # default: use same as input files
 outputFile = outputFile.replace("_RunRUN",f"_Run{options.runNumber:010d}") # fill placeholder
 nanoOutputFile = os.path.join(os.path.dirname(outputFile),f"nano_{os.path.basename(outputFile)}")
 doNANO = options.storeNANOOutput and not (options.skipDigi and options.dqmOnly)
+if os.path.isfile(outputFile):
+  print(f"WARNING! Output file already exists! You may need to remove it to prevent 'Fatal Root Error: @SUB=TStorageFactorySystem::Unlink'")
 
 # DEFAULTS
 print(f">>> Max events:    {options.maxEvents!r}")
