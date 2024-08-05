@@ -128,23 +128,25 @@ void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
         //  std::cout << "\t 0x" << std::hex << *(p+k) << std::endl;
       } else if (iblock == scintillator_block_id) {
         // scintillator
-        // the length should be 9 (BX) * 5 (64b word)
-        // only the 1st 64b word is used; the last (5th) word is a separator
-        auto p_scint = p + 1;
+        // the length should be 7 (BX) * 7 (64b) words
+        // only the LS 32 bits are used
+        // the first word per BX is a header pattern 0xaaaaaaaa, and the 2nd word is a 32-bit counter
+        // only the last (7th) 64b word is used for trig data
+        auto p_scint = p + 7;
         uint32_t trigtime = 0;
         uint32_t trigwidth = 0;
         bool triggered = false;
         while (p_scint <= p + length) {
           // Bits [31:  0] : External Trigger
-          // Bits [63: 32] : 0xABCDFEED
-          // assert((*p_scint >> 32) == 0xABCDFEED);
-          if ((*p_scint >> 32) != 0xABCDFEED) {
-            // FIXME
-            LogDebug("SlinkFileReader") << "Cannot find pattern (0xABCDFEED) in the scintillator word: 0x" << std::hex
-                                        << std::setfill('0') << *p_scint;
-          }
+          // Bits [63: 32] : 0x0
+          // assert((*p_scint >> 32) == 0x0);
+          // if ((*p_scint >> 32) != 0x0) {
+          //   // FIXME
+          //   LogDebug("SlinkFileReader") << "Cannot find pattern (0x0) in the scintillator word: 0x" << std::hex
+          //                               << std::setfill('0') << *p_scint;
+          // }
           uint32_t trigbits = *p_scint & 0xFFFFFFFF;
-          LogDebug("SlinkFileReader") << "BX " << (p_scint - p) / 5 << ": " << std::hex << std::setfill('0') << "0x"
+          LogDebug("SlinkFileReader") << "BX " << (p_scint - p) / 7 << ": " << std::hex << std::setfill('0') << "0x"
                                       << *p_scint << ", trigbits = "
                                       << "0x" << trigbits << std::endl;
           if (not triggered) {
@@ -166,7 +168,7 @@ void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
               break;
             }
           }
-          p_scint += 5;
+          p_scint += 7;
         }
         LogDebug("SlinkFileReader") << "==> trigtime = " << std::dec << std::setfill(' ') << trigtime
                                     << ", trigwidth = " << trigwidth << std::endl;
