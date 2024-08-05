@@ -6,7 +6,7 @@ process = cms.Process("SYSVALDQM")
 from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
 options.register('modules',
-                 "HGCalCommissioning/SystemTestEventFilters/data/ModuleMaps/modulelocator_B27v1.txt",
+                 "HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_B27v1.txt",
                  mytype=VarParsing.varType.string,                 
                  info="Path to module mapper. Absolute, or relative to CMSSW src directory")
 options.register('runNumber',

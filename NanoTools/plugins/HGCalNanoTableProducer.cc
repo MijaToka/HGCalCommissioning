@@ -15,6 +15,8 @@
 
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 
+//Meta data (trigger, ...)
+#include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalTestSystemMetaData.h"
 //DetId
 #include "DataFormats/ForwardDetId/interface/HGCalDetId.h"
 //Digi information
@@ -32,13 +34,15 @@
 class HGCalNanoTableProducer : public edm::stream::EDProducer<> {
 public:
   explicit HGCalNanoTableProducer(const edm::ParameterSet& iConfig)
-      : digisToken_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("digis"))),
+      : metadataToken_(consumes<HGCalTestSystemMetaData>(iConfig.getParameter<edm::InputTag>("metadata"))),
+        digisToken_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("digis"))),
         rechitsToken_(consumes<hgcalrechit::HGCalRecHitHost>(iConfig.getParameter<edm::InputTag>("rechits"))),
         denseIndexInfoTkn_(esConsumes()),
         cellTkn_(esConsumes()),
         moduleTkn_(esConsumes()),
         skipDigi_(iConfig.getParameter<bool>("skipDigi")),
         skipRecHits_(iConfig.getParameter<bool>("skipRecHits")) {
+    produces<nanoaod::FlatTable>("HGCMetaData");        
     if (!skipDigi_)
       produces<nanoaod::FlatTable>("HGCDigi");
     if (!skipRecHits_)
@@ -49,8 +53,9 @@ public:
 
   static void fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
     edm::ParameterSetDescription desc;
-    desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis"))->setComment("Source of DIGIs SoA");
-    desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits"))->setComment("Source of RecHits SoA");
+    desc.add<edm::InputTag>("metadata", edm::InputTag("rawMetaDataCollector", ""))->setComment("Source of DIGIs SoA");
+    desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis", ""))->setComment("Source of DIGIs SoA");
+    desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits", ""))->setComment("Source of RecHits SoA");
     desc.add<bool>("skipDigi", false)->setComment("Does not output DIGIs table if enabled");
     desc.add<bool>("skipRecHits", false)->setComment("Does not output RecHits table if enabled");
     descriptions.addWithDefaultLabel(desc);
@@ -70,6 +75,18 @@ private:
     auto const& denseIndexInfo = iSetup.getData(denseIndexInfoTkn_);
     auto const& denseIndexInfo_view = denseIndexInfo.const_view();
     int32_t ndenseIndices = denseIndexInfo_view.metadata().size();
+
+    //fill data for meta data
+    const auto& metaData = iEvent.get(metadataToken_);
+    auto outmetadata = std::make_unique<nanoaod::FlatTable>(1, "HGCMetaData", true); // singleton table
+    outmetadata->setDoc("HGCal meta data");
+    outmetadata->addColumnValue<uint32_t>("trigTime",    metaData.trigTime_,    "trigger time");
+    outmetadata->addColumnValue<uint32_t>("trigWidth",   metaData.trigWidth_,   "trigger width");
+    outmetadata->addColumnValue<uint32_t>("trigType",    metaData.trigType_,    "trigger type");
+    outmetadata->addColumnValue<uint32_t>("trigSubType", metaData.trigSubType_, "trigger subtype");
+    //outmetadata->addColumnValue<char>(    "injgain",     metaData.injgain_,     "injgain");
+    //outmetadata->addColumnValue<uint32_t>("injcalib",    metaData.injcalib_,    "injcalib");
+    iEvent.put(std::move(outmetadata), "HGCMetaData");
 
     //fill table for digis
     if (!skipDigi_) {
@@ -166,11 +183,12 @@ private:
     }
   }
 
-  void endStream() override{};
+  void endStream() override {};
 
   void beginRun(edm::Run const& iRun, edm::EventSetup const& iSetup) override {}
 
   // ----------member data ---------------------------
+  const edm::EDGetTokenT<HGCalTestSystemMetaData> metadataToken_;
   const edm::EDGetTokenT<hgcaldigi::HGCalDigiHost> digisToken_;
   const edm::EDGetTokenT<hgcalrechit::HGCalRecHitHost> rechitsToken_;
   edm::ESGetToken<hgcal::HGCalDenseIndexInfoHost, HGCalDenseIndexInfoRcd> denseIndexInfoTkn_;

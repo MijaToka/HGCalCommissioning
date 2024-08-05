@@ -71,6 +71,8 @@ public:
 
   void endRunProduce(edm::Run &iRun, const edm::EventSetup &iSetup) final {
 
+    //std::cout << "HGCalRunFEDReadoutSequence::endRunProduce" << std::endl;
+
     //get module info and module indexer
     auto const &modules = iSetup.getData(moduleTkn_);
     auto const &moduleIndex = iSetup.getData(moduleIndexTkn_);
