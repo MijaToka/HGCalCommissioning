@@ -139,7 +139,14 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
   time = (time << 32) + stv.tv_usec;
   edm::Timestamp tstamp(time);
 
-  edm::EventAuxiliary aux(eventID_, processGUID(), tstamp, isRealData_, edm::EventAuxiliary::PhysicsTrigger);
+  edm::EventAuxiliary aux(eventID_,
+                          processGUID(),
+                          tstamp,
+                          isRealData_,
+                          edm::EventAuxiliary::PhysicsTrigger,
+                          bxIdVal_,
+                          edm::EventAuxiliary::invalidStoreNumber,
+                          orbitIdVal_);
   aux.setProcessHistoryID(processHistoryID_);
   makeEvent(eventPrincipal, aux);
     
