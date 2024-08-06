@@ -62,7 +62,7 @@ process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configuration
   slinkHeaderMarker=cms.int32(-1),
   econdHeaderMarker=cms.int32(-1),
   econPassthroughMode=cms.int32(-1),
-  charMode=cms.int32(1),
+  charMode=cms.int32(-1),
   gain=cms.int32(1),
   indexSource=cms.ESInputTag('hgCalMappingESProducer','')
 )
