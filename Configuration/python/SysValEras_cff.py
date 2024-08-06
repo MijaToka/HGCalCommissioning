@@ -11,6 +11,15 @@ _sysvalconfig = {
             'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json'
         },
     },
+    'TB2024': {
+        '1': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json'
+        },
+    },
 }
 
 def getEraConfiguration(era : str) -> dict :
