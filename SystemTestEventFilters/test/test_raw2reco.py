@@ -17,6 +17,8 @@ options.register('runNumber', -1, VarParsing.multiplicity.singleton, VarParsing.
                  "run number")
 options.register('maxEventsPerLumiSection', -1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
                  "Break in lumi sections using this event count")
+options.register('firstEventToProcess', 1, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "first event to process; will skip any events before this")
 options.register('fedId', [0], VarParsing.multiplicity.list, VarParsing.varType.int,
                  "FED IDs")
 options.register('inputFiles',
@@ -164,6 +166,8 @@ process.source = cms.Source(
   fedIds=cms.untracked.vuint32(*options.fedId),
   inputs=cms.untracked.vstring(*inputFiles),
   trig_inputs=cms.untracked.vstring(*options.inputTrigFiles),
+  firstRun=cms.untracked.uint32(options.runNumber),
+  firstEvent=cms.untracked.uint32(options.firstEventToProcess),
   ###trig_num_blocks=6;
   ###trig_scintillator_block_id=5;
   ###trigSeparator=cms.untracked.uint32(options.trigSeparator),
