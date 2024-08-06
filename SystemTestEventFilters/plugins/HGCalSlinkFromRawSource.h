@@ -17,6 +17,7 @@
 #include "FWCore/Framework/interface/EventPrincipal.h"
 #include "FWCore/Sources/interface/DaqProvenanceHelper.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
+#include "FWCore/Sources/interface/EventSkipperByID.h"
 
 #include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -34,7 +35,6 @@ class ParameterSet;
   @short source to put FEDRawData and metadata after parsing system test binary files
  */
 class HGCalSlinkFromRawSource : public edm::RawInputSource {
-
 public:
   explicit HGCalSlinkFromRawSource(edm::ParameterSet const&, edm::InputSourceDescription const&);
   ~HGCalSlinkFromRawSource() override {}
@@ -45,11 +45,10 @@ protected:
   void read(edm::EventPrincipal& eventPrincipal) override;
 
 private:
-
   bool updateRunAndEventInfo();
 
   bool isRealData_;
-  uint32_t runNumberVal_,lumiSectionVal_;
+  uint32_t runNumberVal_, lumiSectionVal_;
   uint64_t eventIdVal_, bxIdVal_, orbitIdVal_;
   int maxEventsPerLumiSection_;
   uint64_t nEventsRead_;
@@ -62,6 +61,7 @@ private:
   const HGCalMetaDataProvenanceHelper metadataProvenanceHelper_;
   edm::EventID eventID_;
   edm::ProcessHistoryID processHistoryID_;
+  std::unique_ptr<edm::EventSkipperByID> eventSkipperByID_;
 
   std::map<unsigned, std::shared_ptr<hgcal::SlinkFileReader>> readers_;
   std::unique_ptr<FEDRawDataCollection> rawData_;
