@@ -14,7 +14,7 @@
 
 #include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
 #include "DataFormats/HGCalDigi/interface/HGCalDigiHost.h"
-#include "DataFormats/HGCalDigi/interface/HGCalECONDInfoHost.h"
+#include "DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoHost.h"
 #include "DataFormats/HGCalDigi/interface/HGCalRawDataDefinitions.h"
 
 #include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
@@ -41,7 +41,7 @@ private:
 
   // output tokens
   const edm::EDPutTokenT<hgcaldigi::HGCalDigiHost> digisToken_;
-  const edm::EDPutTokenT<hgcaldigi::HGCalECONDInfoHost> econdInfoToken_;
+  const edm::EDPutTokenT<hgcaldigi::HGCalECONDPacketInfoHost> econdPacketInfoToken_;
 
   // config tokens and objects
   edm::ESWatcher<HGCalElectronicsMappingRcd> mapWatcher_;
@@ -58,7 +58,7 @@ private:
 TestHGCalRawToDigi::TestHGCalRawToDigi(const edm::ParameterSet& iConfig)
     : fedRawToken_(consumes<FEDRawDataCollection>(iConfig.getParameter<edm::InputTag>("src"))),
       digisToken_(produces<hgcaldigi::HGCalDigiHost>()),
-      econdInfoToken_(produces<hgcaldigi::HGCalECONDInfoHost>()),
+      econdPacketInfoToken_(produces<hgcaldigi::HGCalECONDPacketInfoHost>()),
       cellIndexToken_(esConsumes<edm::Transition::BeginRun>()),
       moduleIndexToken_(esConsumes<edm::Transition::BeginRun>()),
       configToken_(esConsumes<edm::Transition::BeginRun>()) { }
@@ -100,7 +100,7 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
   std::cout << ">>> TestHGCalRawToDigi: Event " << iEvent.id()
             << " ========================================================================================" << std::endl;
   hgcaldigi::HGCalDigiHost digis(moduleIndexer_.getMaxDataSize(), cms::alpakatools::host());
-  hgcaldigi::HGCalECONDInfoHost econdInfo(moduleIndexer_.getMaxModuleSize(), cms::alpakatools::host());
+  hgcaldigi::HGCalECONDPacketInfoHost econdPacketInfo(moduleIndexer_.getMaxModuleSize(), cms::alpakatools::host());
   
   // CREATE DIGIs
   // std::cout << "Created DIGIs SOA with " << digis.view().metadata().size() << " entries" << std::endl;
@@ -109,7 +109,7 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
     const auto& fed_data = raw_data.FEDData(fedId);
     if (fed_data.size() == 0)
       continue;
-    unpacker_.parseFEDData(fedId, fed_data, moduleIndexer_, config_, digis, econdInfo, /*headerOnlyMode*/ false);
+    unpacker_.parseFEDData(fedId, fed_data, moduleIndexer_, config_, digis, econdPacketInfo, /*headerOnlyMode*/ false);
   }
   
   // CHECK DIGIs
