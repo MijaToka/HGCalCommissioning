@@ -82,32 +82,13 @@ rule step_DQM:
         mv {params.dqm} {output.root}
         """
 
-rule step_NANO:
-    params:
-        run = f'{job_dict["Run"]}',
-        era = f'{job_dict["RecoEra"]}',
-        cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_NANO.py"
-    input: 
-        env = rules.scram.output.env,
-        root = rules.step_RAW2DIGI.output.root
-    output:
-        report = "FrameworkJobReport_NANO.xml",
-        root = "NANO.root"
-    shell: 
-        """
-        source {input.env}
-        cmsRun -j {output.report} \
-               {params.cfg} run={params.run} era={params.era} files=file:{input.root} skipRecHits=true maxEvents=-1
-        """
-
 rule step_JobReport:
     params:
         cfgurl = cfgurl
     input: 
         env = rules.scram.output.env,
         report_RAW2DIGI = {rules.step_RAW2DIGI.output.report},
-        report_DQM = {rules.step_DQM.output.report},
-        report_NANO = {rules.step_NANO.output.report}        
+        report_DQM = {rules.step_DQM.output.report}
     output:
         report = "jobreport.json"
     shell: 
@@ -115,7 +96,7 @@ rule step_JobReport:
         source {input.env}
         python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py \
             --initialcfg {params.cfgurl} \
-            --fwkreports {input.report_RAW2DIGI},{input.report_DQM},{input.report_NANO} \
+            --fwkreports {input.report_RAW2DIGI},{input.report_DQM} \
             -o {output.report}
         """
 
@@ -141,27 +122,20 @@ rule endstep:
      input :
            rules.step_RAW2DIGI.output,
            rules.step_DQM.output,
-           rules.step_NANO.output,
            rules.step_JobReport.output
      params:
-        outdir = f'{job_dict["OutputDir"]}'.replace('/eos/cms/','root://eoscms.cern.ch//'),
-        mycopy = "cp -v" if f'{job_dict["OutputDir"]}'.find('/eos/cms/')<0 else "eos cp",
+        mycopy = "cp -v" if f'{job_dict["OutputDir"]}'.find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
+        outdir = f'{job_dict["OutputDir"]}',
         tag = f'{job_dict["Run"]}_{job_dict["LumiSection"]}',
         dqmtag = f'V{job_dict["LumiSection"]:04d}_HGCAL_R{job_dict["Run"]:09d}'
      output:
         log = "endstep.txt"
      shell:
         """
-        mkdir -p {params.outdir}/reports
-        mkdir -p {params.outdir}/dqm
         #ROOT files
         {params.mycopy} {rules.step_RAW2DIGI.output.root} {params.outdir}/RAW2DIGI_{params.tag}.root > {output.log}
         {params.mycopy} {rules.step_DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {output.log}
-        {params.mycopy} {rules.step_NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {output.log}
         #Reports (copy only the final report)
-        #{params.mycopy} {rules.step_RAW2DIGI.output.report} {params.outdir}/reports/FrameworkJobReport_step_RAW2DIGI_{params.tag}.xml >> {output.log}
-        #{params.mycopy} {rules.step_DQM.output.report} {params.outdir}/reports/FrameworkJobReport_step_DQM_{params.tag}.xml >> {output.log}
-        #{params.mycopy} {rules.step_NANO.output.report} {params.outdir}/reports/FrameworkJobReport_step_NANO_{params.tag}.xml >> {output.log}
         {params.mycopy} {rules.step_JobReport.output.report} {params.outdir}/reports/job_{params.tag}.json >> {output.log}
         """
 
@@ -170,6 +144,5 @@ rule all:
         rules.scram.output,
         rules.step_RAW2DIGI.output,
         rules.step_DQM.output,
-        rules.step_NANO.output,
         rules.step_DQM_upload.output,
         rules.endstep.output
