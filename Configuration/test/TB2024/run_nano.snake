@@ -1,0 +1,90 @@
+import json
+import os
+import re
+
+snakefile_dir = os.path.dirname(workflow.basedir)
+
+cfgurl=workflow.config_settings.configfiles[0]
+with open(cfgurl,'r') as cfg:
+    job_dict = json.load(cfg)
+maxEvents=-1
+    
+rule scram:
+    params :
+        cmsswpath = re.findall( "(.*CMSSW_.*/src/)", snakefile_dir )[0]
+    output:
+        env = "cmssw_env.sh",
+        check = "scramdone.txt"
+    shell:
+        """
+        echo "CMSSW base will be set to {params.cmsswpath}" > {output.check}
+        echo "Creating script {output.env}" >> {output.check}
+        echo "#!/bin/bash" > {output.env}
+        echo "[ -z \"$CMS_PATH\" ] && source /cvmfs/cms.cern.ch/cmsset_default.sh" >> {output.env}
+	    echo "export SITECONFIG_PATH=/cvmfs/cms.cern.ch/SITECONF/T2_CH_CERN" >> {output.env}
+        echo "cd {params.cmsswpath}" >> {output.env}
+        echo "eval \\`scramv1 runtime -sh\\`" >> {output.env}
+        echo "cd -" >> {output.env}
+        source {output.env}
+        echo "CMS_PATH=$CMS_PATH" >> {output.check}
+        echo "CMSSW_BASE=$CMSSW_BASE" >> {output.check}
+        """
+
+rule step_NANO:
+    params:
+        run = f'{job_dict["Run"]}',
+        era = f'{job_dict["Era"]}',
+        root = f'{job_dict["Input"]}',
+        cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_NANO.py"
+    input: 
+        env = rules.scram.output.env
+    output:
+        report = "FrameworkJobReport_NANO.xml",
+        root = "NANO.root"
+    shell: 
+        """
+        source {input.env}
+        cmsRun -j {output.report} \
+               {params.cfg} run={params.run} era={params.era} files=file:{params.root} skipRecHits=true maxEvents=-1
+        """
+
+rule step_JobReport:
+    params:
+        cfgurl = cfgurl
+    input: 
+        env = rules.scram.output.env,
+        report_NANO = {rules.step_NANO.output.report}        
+    output:
+        report = "jobreport.json"
+    shell: 
+        """
+        source {input.env}
+        python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py \
+            --initialcfg {params.cfgurl} \
+            --fwkreports {input.report_NANO} \
+            -o {output.report}
+        """
+
+rule endstep:
+     input :
+           rules.step_NANO.output,
+           rules.step_JobReport.output
+     params:
+        mycopy = "cp -v" if f'{job_dict["OutputDir"]}'.find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
+        outdir = f'{job_dict["OutputDir"]}',
+        tag = f'{job_dict["Run"]}_{job_dict["LumiSection"]}',
+     output:
+        log = "endstep.txt"
+     shell:
+        """
+        #ROOT files
+        {params.mycopy} {rules.step_NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {output.log}
+        #Reports (copy only the final report)
+        {params.mycopy} {rules.step_JobReport.output.report} {params.outdir}/reports/job_{params.tag}.json >> {output.log}
+        """
+
+rule all:
+    input:
+        rules.scram.output,
+        rules.step_NANO.output,
+        rules.endstep.output

@@ -1,0 +1,11 @@
+{
+    "OutputDir":"/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/TB2024",
+    "CampaignDir":"./campaigns",
+    "Tag":"v1",
+    "ReRecoEras" : {
+        "TB2024/v1" : "TB2024/v1"
+    },
+    "Workflows" : { 
+	    "TB2024/v1" : "/home/hgcalrd/CMSSW/CMSSW_14_1_0_pre4/src/HGCalCommissioning/Configuration/test/TB2024/run_nano.snake"
+    }
+}
