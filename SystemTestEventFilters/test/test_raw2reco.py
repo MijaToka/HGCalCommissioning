@@ -245,7 +245,6 @@ if options.dqmOnly:
   process.load('HGCalCommissioning.DQM.hgCalSysValDigisHarvester_cfi')
   process.load("DQMServices.FileIO.DQMFileSaverOnline_cfi")
   process.hgCalSysValDigisClient.PrescaleFactor = options.prescale
-  #process.hgCalSysValDigisClient.MetaData = cms.InputTag('rawMetaDataCollector'),
   process.DQMStore = cms.Service("DQMStore")
   process.dqmSaver.tag = 'HGCAL'
   process.dqmSaver.runNumber = options.runNumber
