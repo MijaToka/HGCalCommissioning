@@ -1,5 +1,7 @@
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 
+#include <Eigen/Core>
+
 #include <iostream>
 #include <iomanip>
 #include <stdio.h>
@@ -25,6 +27,9 @@
 #include "DQMServices/Core/interface/MonitorElement.h"
 
 #include "HGCalCommissioning/DQM/interface/HGCalSysValDQMCommon.h"
+#include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
+#include "CondFormats/HGCalObjects/interface/HGCalMappingModuleIndexer.h"
+#include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
 
 #include <TDatime.h>
 #include <TString.h>
@@ -58,9 +63,18 @@ protected:
 
 private:
 
+  /**
+     @short applies a counter-clockwise rotation in multiples of 60deg to a shape described by a TGraph
+   */
+  void rotateShape(TGraph *gr, char irot);
+  
   //location of the hex map templates
   std::string templateDir_;
 
+  //module indexer / info
+  edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIdxTkn_;
+  edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleInfoTkn_;
+  
   //monitoring elements
   MonitorElement *occupancyLayer_, *occupancyModule_, *meTimestamp_;
   std::map<unsigned int, MonitorElement *> hexLayerPlots_;
@@ -69,7 +83,9 @@ private:
 
 //
 HGCalSysValDigisHarvester::HGCalSysValDigisHarvester(const edm::ParameterSet &iConfig)
-    : templateDir_(iConfig.getParameter<std::string>("TemplateFiles"))
+  : templateDir_(iConfig.getParameter<std::string>("TemplateFiles")),
+    moduleIdxTkn_(esConsumes<edm::Transition::EndLuminosityBlock>()),
+    moduleInfoTkn_(esConsumes<edm::Transition::EndLuminosityBlock>())
 {
 
 }
@@ -93,12 +109,30 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
                                                       edm::LuminosityBlock const &iLumi,
                                                       edm::EventSetup const &iSetup) {
 
+  
   //read the available modules from the ECON-D payload histogram
   std::vector<std::string> typecodes;
   const MonitorElement *me = igetter.get("HGCAL/Digis/econdPayload");
   TAxis *xaxis = me->getTH2F()->GetXaxis();
   for(int i=1; i<=xaxis->GetNbins(); i++)
     typecodes.push_back( xaxis->GetBinLabel(i) );
+
+  //get module indexer and module info to fill the rotation index of the modules
+  //for a better display of the hexplots
+  std::vector<char> irotstates(typecodes.size(),0);
+  auto const& moduleIndexer = iSetup.getData(moduleIdxTkn_);
+  auto const& moduleInfo = iSetup.getData(moduleInfoTkn_);
+  for(auto it : moduleIndexer.typecodeMap_) {
+
+    //dqmIndex as pre-determined in the DigisClient
+    uint32_t fedid = it.second.first;
+    uint32_t imod = it.second.second;
+    uint32_t dqmIndex = moduleIndexer.getIndexForModule(fedid, imod);
+
+    //module information
+    auto modInfo = moduleInfo.view()[dqmIndex];
+    irotstates[dqmIndex] = modInfo.irot();
+  }
 
   //define layer-level summary
   ibooker.setCurrentFolder("HGCAL/Layers");
@@ -134,6 +168,7 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
   for(size_t i=0; i<typecodes.size(); i++) {
     
     std::string t = typecodes[i];
+    char irot = irotstates[i];
 
     std::ostringstream ss;
     ss << "_module_" << i;
@@ -189,6 +224,9 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
         continue;
       }
 
+      //apply rotation
+      rotateShape(gr,irot);
+      
       //compute summary for this standard channel
       unsigned eRx = int(iobj/39); //NOTE: CM channels were included in the objects
       unsigned chIdx = iobj - eRx*2;
@@ -259,6 +297,28 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
   fgeo0->Close();
 
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
+}
+
+//
+void HGCalSysValDigisHarvester::rotateShape(TGraph *gr, char irot) {
+
+  //define the full rotation matrix
+  //the template needs a 150 deg shift to be put in the standard position 
+  float angle(irot*M_PI/3.+5*M_PI/6.);
+  Eigen::Matrix2d rotationMatrix;
+  rotationMatrix <<
+    std::cos(angle), -std::sin(angle),
+    std::sin(angle),  std::cos(angle);
+
+  //apply matrix on each pair of coordinates and change the graph points
+  for(int i=0; i<gr->GetN(); i++) {
+
+    Eigen::Vector2d vec(gr->GetX()[i],gr->GetY()[i]); 
+    Eigen::Vector2d rvec = rotationMatrix * vec;
+
+    gr->SetPoint(i,rvec.x(),rvec.y());
+  }
+  
 }
 
 //

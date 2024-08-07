@@ -338,7 +338,6 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     ele.layer = modInfo.plane();
     ele.i1 = modInfo.i1();
     ele.i2 = modInfo.i2();
-
     followedModules_[ MonitoredElementKey_t(fedid,imod) ] = ele;
   }
   size_t nmods(followedModules_.size());

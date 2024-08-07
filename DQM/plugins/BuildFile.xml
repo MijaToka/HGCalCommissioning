@@ -8,4 +8,5 @@
 <use name="Geometry/HGCalMapping"/>
 <use name="HGCalCommissioning/SystemTestEventFilters"/>
 <use name="HGCalCommissioning/DQM"/>
+<use name="eigen"/>
 <flags EDM_PLUGIN="1"/>
