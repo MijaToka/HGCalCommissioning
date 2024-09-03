@@ -29,18 +29,18 @@ rvec_f assignAveragedCM(const rvec_i &ch_module, const rvec_i &ch_erx,const rvec
 /**
    @short selects the neighouring cells around a seed with a delta (u,v) radius
  */
-rvec_b channelNeighbors(const rvec_i &HGC_module,const rvec_i &HGC_ch,const rvec_i &HGC_u,const rvec_i &HGC_v, int econd, int seed_u, int seed_v,int maxduv=1) {
+rvec_b channelNeighbors(const rvec_i &HGCDigi_module,const rvec_i &HGCDigi_ch,const rvec_i &HGCDigi_u,const rvec_i &HGCDigi_v, int econd, int seed_u, int seed_v,int maxduv=1) {
 
-  std::vector<bool> mask(HGC_module.size(),false);
+  std::vector<bool> mask(HGCDigi_module.size(),false);
 
-  for(size_t i=0; i<HGC_module.size(); i++){
+  for(size_t i=0; i<HGCDigi_module.size(); i++){
 
-    if(HGC_module[i]!=econd) continue;
+    if(HGCDigi_module[i]!=econd) continue;
 
-    int du=HGC_u[i]-seed_u;
+    int du=HGCDigi_u[i]-seed_u;
     if(du>maxduv || du<-maxduv) continue;
 
-    int dv=HGC_v[i]-seed_v;
+    int dv=HGCDigi_v[i]-seed_v;
     if(dv>maxduv || dv<-maxduv) continue;
 
     if(dv>du+maxduv || dv<du-maxduv) continue;
@@ -51,10 +51,48 @@ rvec_b channelNeighbors(const rvec_i &HGC_module,const rvec_i &HGC_ch,const rvec
 }
 
 /**
-   simple matcher in u,v coordinates
+   @short simple matcher in u,v coordinates
  */
-rvec_b matchesUV(const rvec_i &HGC_u,const rvec_i &HGC_v,int seed_u, int seed_v) {
-  return (HGC_u==seed_u) && (HGC_v==seed_v);  
+rvec_b matchesUV(const rvec_i &HGCDigi_u,const rvec_i &HGCDigi_v,int seed_u, int seed_v) {
+  return (HGCDigi_u==seed_u) && (HGCDigi_v==seed_v);  
+}
+
+/**
+   @short coherent noise estimator
+   computes either the direct sum or the alternated sum over the channels a ROC
+   for the purpose of estimating the coheerent noise
+   mode = 0 : return roc indices
+          1 : return # channels
+          2 : direct sum
+          3 : alternated sum
+ */
+rvec_f sumOverRoc(const rvec_i &ch, const rvec_f &en, int mode) {
+
+  std::vector<float> sums;
+
+  //loop over channels and build sums per roc
+  for(size_t i=0; i<ch.size(); i++){
+    
+    int iroc = int(ch[i]/74);
+    if(int(sums.size())<=iroc) sums.resize(iroc+1,0.);
+
+    if(mode==0) {
+      sums[iroc]=iroc;
+    }
+    else if (mode==1) {
+      sums[iroc]+=1;
+    }
+    else {
+      float kfact =
+        mode==3 ?
+        (ch[i]%2==0 ? -1 : 1) :
+        1.;
+      sums[iroc] += en[i]*kfact;
+    }
+  }
+
+
+  return rvec_f(sums.begin(), sums.end());
 }
 
 

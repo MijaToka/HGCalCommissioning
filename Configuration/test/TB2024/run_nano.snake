@@ -30,14 +30,31 @@ rule scram:
         echo "CMSSW_BASE=$CMSSW_BASE" >> {output.check}
         """
 
+rule step_RECO:
+    params:
+        era = f'{job_dict["Era"]}',
+        root = f'{job_dict["Input"]}',
+        cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_RECO.py"
+    input: 
+        env = rules.scram.output.env
+    output:
+        report = "FrameworkJobReport_RECO.xml",
+        root = "RECO.root"
+    shell: 
+        """
+        source {input.env}
+	cmsRun -j {output.report} \
+	       {params.cfg} era={params.era} files=file:{params.root} maxEvents=-1 gpu=false output={output.root}
+        """
+
 rule step_NANO:
     params:
         run = f'{job_dict["Run"]}',
         era = f'{job_dict["Era"]}',
-        root = f'{job_dict["Input"]}',
         cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_NANO.py"
     input: 
-        env = rules.scram.output.env
+        env = rules.scram.output.env,
+	root = rules.step_RECO.output.root
     output:
         report = "FrameworkJobReport_NANO.xml",
         root = "NANO.root"
@@ -45,7 +62,7 @@ rule step_NANO:
         """
         source {input.env}
         cmsRun -j {output.report} \
-               {params.cfg} run={params.run} era={params.era} files=file:{params.root} skipRecHits=true maxEvents=-1
+               {params.cfg} run={params.run} era={params.era} files=file:{input.root} skipRecHits=false maxEvents=-1
         """
 
 rule step_JobReport:
@@ -53,6 +70,7 @@ rule step_JobReport:
         cfgurl = cfgurl
     input: 
         env = rules.scram.output.env,
+	report_RECO = {rules.step_RECO.output.report},
         report_NANO = {rules.step_NANO.output.report}        
     output:
         report = "jobreport.json"
@@ -61,12 +79,13 @@ rule step_JobReport:
         source {input.env}
         python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py \
             --initialcfg {params.cfgurl} \
-            --fwkreports {input.report_NANO} \
+            --fwkreports {input.report_RECO},{input.report_NANO} \
             -o {output.report}
         """
 
 rule endstep:
      input :
+     	   rules.step_RECO.output,
            rules.step_NANO.output,
            rules.step_JobReport.output
      params:
@@ -86,5 +105,6 @@ rule endstep:
 rule all:
     input:
         rules.scram.output,
+	rules.step_RECO.output,	
         rules.step_NANO.output,
         rules.endstep.output

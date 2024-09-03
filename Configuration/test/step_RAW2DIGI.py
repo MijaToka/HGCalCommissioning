@@ -52,34 +52,6 @@ process.rawDataCollector = cms.EDAlias(
   )
 )
 
-# GLOBAL HGCAL CONFIGURATION (for unpacker)
-process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
-  'HGCalConfigurationESProducer',
-  fedjson=cms.string(eraConfig['fedconfig']), # JSON with FED configuration parameters
-  modjson=cms.string(eraConfig['modconfig']), # JSON with ECON-D configuration parameters
-  bePassthroughMode=cms.int32(-1),
-  cbHeaderMarker=cms.int32(-1),
-  slinkHeaderMarker=cms.int32(-1),
-  econdHeaderMarker=cms.int32(-1),
-  econPassthroughMode=cms.int32(-1),
-  charMode=cms.int32(-1),
-  gain=cms.int32(1),
-  indexSource=cms.ESInputTag('hgCalMappingESProducer','')
-)
-
-# CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
-process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
-  'hgcalrechit::HGCalConfigurationESProducer@alpaka',
-  gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration : Discuss with Izaak this line
-  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
-)
-process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
-  'hgcalrechit::HGCalCalibrationESProducer@alpaka',
-  filename=cms.string(eraConfig['modcalib']),
-  indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
-  configSource=cms.ESInputTag('hgcalConfigParamESProducer', ''),
-)
-
 # RAW -> DIGI producer
 process.load('EventFilter.HGCalRawToDigi.hgcalDigis_cfi')
 process.hgcalDigis.src = cms.InputTag('rawDataCollector')
