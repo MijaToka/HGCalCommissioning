@@ -163,10 +163,12 @@ private:
       std::vector<double> energy(nrechits), time(nrechits);
       std::vector<float> x(nrechits), y(nrechits);
       std::vector<int> layer(nrechits);
+      std::vector<uint16_t> rechitflags(nrechits);
       std::vector<bool> zSide(nrechits);
       for (int32_t i = 0; i < nrechits; i++) {
         energy[i] = rechits_view.energy()[i];
         time[i] = rechits_view.time()[i];
+        rechitflags[i] = rechits_view.flags()[i];
         x[i] = denseIndexInfo_view.z()[i];
         y[i] = denseIndexInfo_view.y()[i];
         HGCalDetId detId(denseIndexInfo_view.detid()[i]);
@@ -175,6 +177,7 @@ private:
       }
       outhit->addColumn<double>("energy", energy, "calibrated energy");
       outhit->addColumn<double>("time", time, "time");
+      outhit->addColumn<uint16_t>("flags", rechitflags, "rec hit quality flags");
       outhit->addColumn<int>("layer", layer, "layer");
       outhit->addColumn<float>("x", x, "x coordinate from geometry");
       outhit->addColumn<float>("y", y, "y coordinate from geometry");

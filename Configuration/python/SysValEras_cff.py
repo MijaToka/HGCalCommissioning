@@ -17,8 +17,15 @@ _sysvalconfig = {
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
             'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
             'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json'
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v1.json'
         },
+        '2': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v2.json'
+        },        
     },
 }
 
@@ -68,6 +75,34 @@ def initSysValCMSProcess(procname : str, era : str, maxEvents : int = -1) -> (cm
     from Geometry.HGCalMapping.hgcalmapping_cff import customise_hgcalmapper
     process = customise_hgcalmapper(process, modules=eraConfig['modules'])
 
+    # GLOBAL HGCAL CONFIGURATION (for unpacker)
+    process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
+        'HGCalConfigurationESProducer',
+        fedjson=cms.string(eraConfig['fedconfig']), # JSON with FED configuration parameters
+        modjson=cms.string(eraConfig['modconfig']), # JSON with ECON-D configuration parameters
+        bePassthroughMode=cms.int32(-1),
+        cbHeaderMarker=cms.int32(-1),
+        slinkHeaderMarker=cms.int32(-1),
+        econdHeaderMarker=cms.int32(-1),
+        econPassthroughMode=cms.int32(-1),
+        charMode=cms.int32(-1),
+        gain=cms.int32(1),
+        indexSource=cms.ESInputTag('hgCalMappingESProducer','')
+    )
+
+    # CALIBRATIONS & CONFIGURATION Alpaka ESProducers (for DIGI -> RECO step)
+    process.hgcalConfigParamESProducer = cms.ESProducer( # ESProducer to load configurations parameters from YAML file, like gain
+        'hgcalrechit::HGCalConfigurationESProducer@alpaka',
+        gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration : Discuss with Izaak this line
+        indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
+    )
+    process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
+        'hgcalrechit::HGCalCalibrationESProducer@alpaka',
+        filename=cms.string(eraConfig['modcalib']),
+        indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
+        configSource=cms.ESInputTag('hgcalConfigESProducer', '')
+    )
+    
     # TIMING Report
     process.Timing = cms.Service("Timing",
                                  summaryOnly=cms.untracked.bool(True),
