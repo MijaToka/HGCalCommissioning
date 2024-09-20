@@ -2,48 +2,11 @@ import sys
 import ROOT
 import argparse
 import json
-    
-def fillHexPlot(ch_values,moduletype='ML_L'):
-
-    """
-    this method takes care of instatiating a hexplot for a given module type and fill it with the values for the required channels
-    ch_values is a dict of (channel number, value)
-    module_type is a string with the module type to be used in the hexplot
-    """
-    
-    #create the hexplot
-    hex_plot = ROOT.TH2Poly()
-    hex_plot.SetDirectory(0)
-    fgeo=ROOT.TFile.Open(f'../DQM/data/geometry_{moduletype}_wafer.root','R')
-    iobj=0
-    for key in fgeo.GetListOfKeys():
-        obj = key.ReadObj()
-        if not obj.InheritsFrom("TGraph") : continue
-
-        #ignore CM
-        isCM = (iobj % 39 == 37) or (iobj % 39 == 38)
-        if isCM :
-            iobj += 1
-            continue
-
-        hex_plot.AddBin(obj)
-        
-        eRx = int(iobj/39)
-        idx = iobj - eRx*2 #take out 2 CM per eRx to get the proper idx
-        if idx < len(ch_values):
-            hex_plot.SetBinContent(idx+1,ch_values[idx])
-        else:
-            raise ValueError(f'Length of values {len(ch_values)} does not accomodate for #obj={iobj} eRx={eRx} idx={idx}')
-
-        iobj+=1
-        
-    fgeo.Close()
-
-    return hex_plot
+from HGCalCommissioning.LocalCalibration.plot.wafer import fill_wafer_hist
     
 def createCalibHexPlotSummary(jsonfile : str, outputfile : str) :
     """
-    opens a json calibration file and fills the appropriate hexplots for every parameter
+    Opens a json calibration file and fills the appropriate hexplots for every parameter
     the result is stored in a ROOT file where each folder corresponds to a different module
     """
 
@@ -52,9 +15,9 @@ def createCalibHexPlotSummary(jsonfile : str, outputfile : str) :
         calibs_dict = json.load(fin)
 
     #fill hex plots for every parameter and save to ROOT file
-    fOut=ROOT.TFile.Open(outputfile,'RECREATE')
+    fOut = ROOT.TFile.Open(outputfile,'RECREATE')
     def _saveAsHexPlot(values,moduletype,hname,htitle,dOut):
-        h=fillHexPlot(values,moduletype)
+        h = fill_wafer_hist(values,moduletype)
         h.SetName(hname)
         h.SetTitle(htitle)
         dOut.cd()
