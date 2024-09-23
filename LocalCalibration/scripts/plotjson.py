@@ -11,7 +11,7 @@ import os, re
 import json
 from HGCalCommissioning.LocalCalibration.plot.wafer import *
 import plotly.graph_objects as go
-import plotly.colors as pc
+colorscale, colorscale_tuple = getcolorscale('RdBu',invert=True)
 
 
 def bold(string,prefix=""):
@@ -54,8 +54,6 @@ def plotlist_wafer(fname,zvals,title,outdir='plots',template='plotly',
   if verb>=1:
     print(f">>> plotlist_wafer: Plotting fname={fname}, title={title!r}, ztitle={ztitle!r}, modtype={modtype!r}")
   modtype = modtype[:4].replace('-','_')
-  colorscale = pc.get_colorscale('Hot')
-  colorscale_tuple = getcolorscale(colorscale)
   
   # CREATE FIGURE from CACHED TEMPLATE
   fig = create_wafer_template(len(zvals),modtype=modtype,template=template,verb=verb)
@@ -165,7 +163,7 @@ def plotlist(fname,dataset,labels,key,outdir='plots',template='plotly',exts=['.p
   nmin   = min(len(ds) for ds in dataset)
   nmax   = max(len(ds) for ds in dataset)
   if nmin!=nmax: # add gaps
-    assert nmin%37==0 and nmax%39==0, f"plotlist:   nmin={nmin}, nmax={nmax}"
+    assert nmin%37==0 and nmax%37==0, f"plotlist:   nmin={nmin}, nmax={nmax}"
     xvals_gap = [i*39+j for i in range(nmax//39) for j in range(0,37)]
     for yvals in dataset:
       if nmin==len(yvals): # add gaps
