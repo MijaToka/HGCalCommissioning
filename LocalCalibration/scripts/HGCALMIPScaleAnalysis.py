@@ -8,11 +8,12 @@ from scipy import stats
 import itertools
 from tqdm import tqdm
 import ROOT
+
 try:
-    from HGCalCommissioning.LocalCalibration.JSONEncoder import getCalibTemplate
+  from HGCalCommissioning.LocalCalibration.JSONEncoder import *
 except ImportError:
-    sys.path.append('./python/')
-    from JSONEncoder import getCalibTemplate
+  sys.path.append('./python/')
+  from JSONEncoder import *
 
 class HGCALMIPScaleAnalysis(HGCALCalibration):
 
@@ -30,6 +31,7 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
 
     def __init__(self):
         self.histofiller = self.mipHistoFiller
+        ROOT.gROOT.SetBatch(True)
         ROOT.gInterpreter.Declare('#include "interface/fit_models.h"')
         ROOT.shushRooFit()
         super().__init__()
@@ -38,7 +40,7 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
     def mipHistoFiller(args):
         """costumize the histo filler for the MIP analysis"""
 
-        outdir, module, task_spec = args
+        outdir, module, task_spec, cmdargs = args
     
         #start RDataFrame from specifications
         rdf = ROOT.RDF.Experimental.FromSpec(task_spec)
@@ -52,12 +54,15 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
                 .Define('maskhit',       'good_rechit & target_module') \
                 .Define('ch',            'HGCDigi_channel[maskhit]') \
                 .Define('en',            'HGCHit_energy[maskhit]') \
-                .Define('deltaADC',      'HGCDigi_adc[maskhit]-HGCDigi_adcm1[maskhit]')
+                .Define('deltaADC',      'HGCDigi_adc[maskhit]-HGCDigi_adcm1[maskhit]') \
+                .Filter('HGCMetaData_trigType==1') \
+                .Filter('HGCMetaData_trigSubType==2') 
+        
 
 
         profiles=[]
         nch=222 #NOTE: fix me, should be in the task_spec depending on the module
-        enbinning=(nch,-0.5,nch-0.5,200,-0.5,199.5,100,-10.25,39.75)
+        enbinning=(nch,-0.5,nch-0.5,200,-0.5,199.5,100,-10.25,39.75) #0.5 binning in RecHit energy
         adcbinning=(nch,-0.5,nch-0.5,200,-0.5,199.5,50,-10.5,39.5)
         profiles += [
             rdf.Histo3D(("en",       ';Channel;Trig phase;RecHit energy', *enbinning),  "ch", "HGCMetaData_trigTime", "en"),
@@ -92,6 +97,9 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         parser.add_argument("--rebinForFit",
                             default='-1', type=int,
                             help='Rebin for fit=%(default)s')
+        parser.add_argument("--doHexPlots",
+                            action='store_true',
+                            help='save hexplots for the pedestals')
 
     def buildScanParametersDict(self,file_list,module_list):
         """a  MIP scan analysis doesn't have any parameters scanned, return lists of empty dicts"""
@@ -124,7 +132,7 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         mipfitreport['Typecode'] = typecode
 
         #save histograms to ROOT file
-        rooturl = f'{cmdargs.output}/Run{cmdargs.run}/mipfits_{typecode}.root'
+        rooturl = f'{cmdargs.output}/mipfits_{typecode}.root'
         fOut=ROOT.TFile.Open(rooturl,'RECREATE')
         for h in mipfitreport['Histos']:
             h.Write()
@@ -145,10 +153,12 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
             histos = r.pop('Histos')
             correctors[typecode]=r
         
-        jsonurl = f'{self.output}/mipfits.json'        
-        DAU.saveAsJson(jsonurl, correctors, compress=False)
+        jsonurl = f'{self.cmdargs.output}/mipfits.json'
+        saveAsJson(jsonurl, correctors)
 
-        #HPU.createCalibHexPlotSummary(jsonurl,rooturl)
+        if self.cmdargs.doHexPlots:
+            rooturl = f'{self.cmdargs.output}/mipfits_hexplots.root'
+            HPU.createCalibHexPlotSummary(jsonurl,rooturl)
             
         return jsonurl
 

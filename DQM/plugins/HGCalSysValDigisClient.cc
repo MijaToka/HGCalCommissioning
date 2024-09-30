@@ -76,7 +76,7 @@ private:
   void analyze(const edm::Event&, const edm::EventSetup&) override;
   void analyzeECONDFlags(const edm::Event& iEvent, const edm::EventSetup& iSetup);
   void analyzeModules(const edm::Event& iEvent, const edm::EventSetup& iSetup, int trigTime);
-
+  
   /** 
     @short for each module finds the channel with largest delta ADC to be used for special monitoring histograms
   */
@@ -97,7 +97,7 @@ private:
   std::map<std::string, std::map<MonitoredElementKey_t, MonitorElement*> > moduleHistos_;
   std::map<MonitoredElementKey_t, uint32_t> moduleSeeds_;
 
-  MonitorElement *trigTimeH_;
+  MonitorElement *trigTimeH_,*trigTypeH_;
   MonitorElement *econdQualityH_, *cbQualityH_, *econdPayload_;
 };
 
@@ -133,18 +133,31 @@ void HGCalSysValDigisClient::fillDescriptions(edm::ConfigurationDescriptions& de
 //
 void HGCalSysValDigisClient::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup) {
 
-  //check if this an event which should be tracked
-  bool toProcess = (nProcessed_ < minEvents_) || (nProcessed_ % prescaleFactor_ == 0);
   ++nProcessed_;
-  if (!toProcess)
-    return;
 
   //trigger time
   const auto& metadata = iEvent.get(metaDataTkn_);
   int trigTime = metadata.trigTime_;
   trigTimeH_->Fill(trigTime);
+  int trigType=metadata.trigType_;
+  int trigSubType=metadata.trigSubType_;
+  for(size_t i=0; i<6; i++) {
+    bool hasType((trigType>>i) & 0x1);
+    if(!hasType) continue;
+    for(size_t j=0; j<2; j++) {
+      bool hasSubType((trigSubType>>j) & 0x1);
+      if(!hasSubType) continue;
+      trigTypeH_->Fill(i,j);
+    }
+  }
 
   analyzeECONDFlags(iEvent,iSetup);
+
+  //check if this an event which should be tracked
+  bool toProcess = (nProcessed_ < minEvents_) || (nProcessed_ % prescaleFactor_ == 0);
+  if (!toProcess)
+    return;
+  
   analyzeModules(iEvent,iSetup,trigTime);
   findModuleSeeds();
 }  
@@ -249,7 +262,7 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
     moduleHistos_["seedadc"][key]->Fill(digi.adc());
     moduleHistos_["seedtoa"][key]->Fill(digi.toa());    
     moduleHistos_["seedadcvstrigtime"][key]->Fill(trigTime,digi.adc());
-    moduleHistos_["seedadcvstrigtime"][key]->Fill(trigTime,digi.toa());    
+    moduleHistos_["seedtoavstrigtime"][key]->Fill(trigTime,digi.toa());    
   }
 
 }
@@ -291,22 +304,49 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
   //find bin for each econ and fill its histograms
   // Flags are described in DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoSoA.h
   for(auto it : followedModules_) {
+
     const uint32_t imod = it.second.dqmIndex; // global/dense module index
     const auto econd = econdInfo->const_view()[imod];
+
     econdPayload_->Fill(imod,econd.payloadLength());
     cbQualityH_->Fill(imod,econd.cbFlag());
+    
     if (econd.cbFlag()) econdQualityH_->Fill(imod, 0);
-    if (hgcaldigi::htFlag(econd.econdFlag())>0) econdQualityH_->Fill(imod, 1);
-    if (hgcaldigi::eboFlag(econd.econdFlag())>0) econdQualityH_->Fill(imod, 2);
-    //econdQualityH_->Fill(imod, 1, hgcaldigi::htFlag(econd.econdFlag()));
-    //econdQualityH_->Fill(imod, 2, hgcaldigi::eboFlag(econd.econdFlag()));
-    if (hgcaldigi::matchFlag(econd.econdFlag())) econdQualityH_->Fill(imod, 3);
-    if (hgcaldigi::truncatedFlag(econd.econdFlag())) econdQualityH_->Fill(imod, 4);
-    if (hgcaldigi::expectedFlag(econd.econdFlag())) econdQualityH_->Fill(imod, 5);
-    if (hgcaldigi::StatFlag(econd.econdFlag())) econdQualityH_->Fill(imod, 6);
-    if (econd.exception()==3) econdQualityH_->Fill(imod, 7); // wrongHeaderMarker
-    if (econd.exception()==4) econdQualityH_->Fill(imod, 8); // payloadOverflows
-    if (econd.exception()==5) econdQualityH_->Fill(imod, 9); // payloadMismatches
+    auto htflags=hgcaldigi::htFlag(econd.econdFlag());
+    auto eboflags=hgcaldigi::eboFlag(econd.econdFlag());
+    if (htflags>0) econdQualityH_->Fill(imod, 0 + htflags);
+    if (eboflags>0) econdQualityH_->Fill(imod, 3 + eboflags);
+    if (hgcaldigi::matchFlag(econd.econdFlag())==0) econdQualityH_->Fill(imod, 7);
+    if (hgcaldigi::truncatedFlag(econd.econdFlag())) econdQualityH_->Fill(imod, 8);
+    if (hgcaldigi::expectedFlag(econd.econdFlag())==0) econdQualityH_->Fill(imod, 9);
+    if (hgcaldigi::StatFlag(econd.econdFlag())==1) econdQualityH_->Fill(imod, 10);
+    if (econd.exception()==3) econdQualityH_->Fill(imod, 11); // wrongHeaderMarker
+    if (econd.exception()==4) econdQualityH_->Fill(imod, 12); // payloadOverflows
+    if (econd.exception()==5) econdQualityH_->Fill(imod, 13); // payloadMismatches
+
+    if (econd.exception()==5 ||
+	htflags>0 ||
+	eboflags>0 ||
+	hgcaldigi::matchFlag(econd.econdFlag())==0 ||
+	hgcaldigi::truncatedFlag(econd.econdFlag()) ||
+	hgcaldigi::expectedFlag(econd.econdFlag())==0 ||
+	hgcaldigi::StatFlag(econd.econdFlag())==1 ||
+	econd.exception()==3 ||
+	econd.exception()==4 ||
+	econd.exception()==5 ) {
+      std::cout << iEvent.run() << " " << iEvent.id() << " | "	
+		<< "ECON#" << imod << " | "
+		<< (htflags>0)
+		<< (eboflags>0)
+		<< (hgcaldigi::matchFlag(econd.econdFlag())==0)
+		<< (hgcaldigi::truncatedFlag(econd.econdFlag()))
+		<< (hgcaldigi::expectedFlag(econd.econdFlag())==0)
+		<< (hgcaldigi::StatFlag(econd.econdFlag())==1)
+		<< (econd.exception()==3)
+		<< (econd.exception()==4)
+		<< (econd.exception()==5) 
+		<< std::endl;
+    }
   }
 
 }
@@ -345,17 +385,29 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
 
   //book monitoring elements (histos, profiles, etc.)
   ibook.setCurrentFolder("HGCAL/Digis");
-
-  //trigtime
+ 
+  //trigtime and trigtype
+  trigTypeH_ = ibook.book2D("trigtype", ";Trigger Type; Trigger SubType; Counts", 6,0,6,2,0,2);
+  std::vector<std::string> trigtypes = { "Phys", "Calib" , "Random" ,"SW", "Reserve4", "Reserve5"};
+  std::vector<std::string> trigsubtypes = { "ECON-T","Ext."};
+  for(size_t i=0; i<trigtypes.size(); i++)
+    trigTypeH_->setBinLabel(i+1,trigtypes[i],1);
+  for(size_t i=0; i<trigsubtypes.size(); i++)
+    trigTypeH_->setBinLabel(i+1,trigsubtypes[i],2);
   trigTimeH_ = ibook.book1D("trigtime", ";trigger phase; Counts", 200, 0, 200);
 
   //ECON-D flags and payload
   //the last loop also instantiates the per module histograms (besides setting the bin labels of ECON-D names)
   econdPayload_ = ibook.book2D("econdPayload", ";ECON-D;Payload", nmods, 0, nmods, 200, 0, 500);
 
-  std::vector<std::string> econdflags = {"CB","H/T","E/B/O","M","Trunc","Expected","Status","Marker","Payload (OF)","Payload (mismatch)"};
+  std::vector<std::string> econdflags = {
+    "CB",
+    "H/T good",    "H/T fail",    "H/T amb",
+    "E/B/O good",  "E/B/O fail",  "E/B/O amb",
+    "Unmatched (M)",   "Trunc (T)", "Unexpected (E)", "Sub-packet error (S)",
+    "Marker", "Payload (OF)", "Payload (mismatch)"};
   size_t necondflags = econdflags.size();
-  econdQualityH_ = ibook.book2D("econdQualityH", ";ECON-D;Header quality flags", nmods, 0, nmods, necondflags, 0, necondflags);
+  econdQualityH_ = ibook.book2D("econdQualityH", ";ECON-D;Header quality;", nmods, 0, nmods, necondflags, 0, necondflags);
   for(size_t i=0; i<necondflags; i++) econdQualityH_->setBinLabel(i+1, econdflags[i].c_str(), 2);
 
   std::vector<std::string> cbflags = {"Normal","Payload","CRC Error","EvID Mis.","FSM T/O","BCID/OrbitID","MB Overflow","Innactive"};

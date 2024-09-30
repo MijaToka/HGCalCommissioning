@@ -27,6 +27,7 @@ compilation-check:
     - cmsenv
     - git cms-merge-topic -u CMS-HGCAL:dev/hackathon_base_CMSSW_14_1_X
     - git cms-merge-topic -u ywkao:hgcal-dqm_with_th2poly-13_2_X
+    - echo "git clone $CI_MERGE_REQUEST_SOURCE_PROJECT_URL HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
     - git clone $CI_MERGE_REQUEST_SOURCE_PROJECT_URL HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
     - ls -ltr
     - scram b -j 8

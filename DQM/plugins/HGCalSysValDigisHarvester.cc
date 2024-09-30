@@ -185,9 +185,11 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
     hexPlots_[t]["deltaadc"] = ibooker.book2DPoly("hex_deltaadc"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::DELTAPEDESTAL), -14, 14, -14, 14);
     hexPlots_[t]["avgtoa"] = ibooker.book2DPoly("hex_avgtoa"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::TOAAVG), -14, 14, -14, 14);
     hexPlots_[t]["avgtot"] = ibooker.book2DPoly("hex_avgtot"+tag, t + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::TOTAVG), -14, 14, -14, 14);
+    hexPlots_[t]["occupancy"] = ibooker.book2DPoly("hex_occupancy"+tag, t + "; x[cm]; y[cm];Occupancy", -14, 14, -14, 14);
 
     //the sums histogram + helper functions to compute final quantities
     const MonitorElement *sum_me = igetter.get("HGCAL/Digis/sums" + tag);
+    const MonitorElement *occ_me = igetter.get("HGCAL/Digis/occupancy" + tag);
     auto num = [](SumIndices_t nidx, uint32_t chIdx, const MonitorElement *sum_me) -> float {
       float n = sum_me->getBinContent(chIdx+1,nidx+1);
       return n;
@@ -201,7 +203,8 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
       float n = sum_me->getBinContent(chIdx+1, nidx+1);
       float v = sum_me->getBinContent(chIdx+1, vidx+1);
       float vv = sum_me->getBinContent(chIdx+1, vvidx+1);
-      return n > 1 ? sqrt(vv/n-pow(v/n,2))*(n/(n-1)) : 0.f; 
+      float std = n > 1 ? (vv/n-pow(v/n,2))*(n/(n-1)) : 0.f;      
+      return std<0 ? -sqrt(fabs(std)) : sqrt(std);
     };
 
     //open file and loop over keys to hadd to THPoly (sequence of channel representations)
@@ -258,7 +261,11 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
       float avgtot = mean( SumIndices_t::SUMTOT, SumIndices_t::NTOT, chIdx, sum_me);
       hexPlots_[t]["avgtot"]->addBin(gr);
       hexPlots_[t]["avgtot"]->setBinContent(chIdx+1, avgtot);
-    
+
+      hexPlots_[t]["occupancy"]->addBin(gr);
+      float occval = occ_me->getBinContent(chIdx+1);
+      hexPlots_[t]["occupancy"]->setBinContent(chIdx+1, occval);
+      
       iobj++;
     }//end loop over template file keys
 

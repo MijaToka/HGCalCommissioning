@@ -75,3 +75,15 @@ def getCalibTemplate(nch) :
     }
 
     return calib_templ_dict
+
+def saveAsJson(url : str, results : dict, compress=False):
+    """takes care of saving to a json file"""
+    
+    if compress:
+        json_str = json.dumps(results,cls=CompactJSONEncoder) + "\n"
+        json_bytes = json_str.encode('utf-8')
+        with gzip.open(url, 'w') as outfile:
+            outfile.write(json_bytes)
+    else:
+        with open(url,'w') as outfile:
+            json.dump(results,outfile,cls=CompactJSONEncoder,sort_keys=True,indent=2)

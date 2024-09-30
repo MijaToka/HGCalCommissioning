@@ -171,7 +171,7 @@ void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
           p_scint += 7;
         }
         LogDebug("SlinkFileReader") << "==> trigtime = " << std::dec << std::setfill(' ') << trigtime
-                                    << ", trigwidth = " << trigwidth << std::endl;
+                                    << ", trigwidth = " << trigwidth << " scintillator_block_id=" << scintillator_block_id;
         metaData.trigTime_ = trigtime;
         metaData.trigWidth_ = trigwidth;
         break;

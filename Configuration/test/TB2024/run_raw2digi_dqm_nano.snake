@@ -5,8 +5,9 @@ rule step_JobReport:
         cfgurl = cfgurl
     input: 
         env = rules.scram.output.env,
-	report_RECO = {rules.step_RECO.output.report},
-        report_NANO = {rules.step_RECO2NANO.output.report},
+        report_RAW2DIGI = {rules.step_RAW2DIGI.output.report},
+        report_DQM = {rules.step_DQM.output.report},
+        report_NANO = {rules.step_RAW2NANO.output.report},
     output:
         report = "jobreport.json"
     shell: 
@@ -14,26 +15,29 @@ rule step_JobReport:
         source {input.env}
         python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py \
             --initialcfg {params.cfgurl} \
-            --fwkreports {input.report_RECO},{input.report_NANO} \
+            --fwkreports {input.report_RAW2DIGI},{input.report_DQM},{input.report_NANO} \
             -o {output.report}
         """
 
 rule endstep:
      input :
-     	   rules.step_RECO.output,
-           rules.step_RECO2NANO.output,
+           rules.step_RAW2DIGI.output,
+           rules.step_DQM.output,
+           rules.step_RAW2NANO.output,
            rules.step_JobReport.output
      params:
         mycopy = "cp -v" if f'{job_dict["OutputDir"]}'.find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
         outdir = f'{job_dict["OutputDir"]}',
         tag = f'{job_dict["Run"]}_{job_dict["LumiSection"]}',
+        dqmtag = f'V{job_dict["LumiSection"]:04d}_HGCAL_R{job_dict["Run"]:09d}'
      output:
         log = "endstep.txt"
      shell:
         """
         #ROOT files
-        {params.mycopy} {rules.step_RECO.output.root} {params.outdir}/RECO_{params.tag}.root >> {output.log}
-        {params.mycopy} {rules.step_RECO2NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {output.log}
+        {params.mycopy} {rules.step_RAW2DIGI.output.root} {params.outdir}/RAW2DIGI_{params.tag}.root > {output.log}
+        {params.mycopy} {rules.step_DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {output.log}
+        {params.mycopy} {rules.step_RAW2NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {output.log}	
         #Reports (copy only the final report)
         {params.mycopy} {rules.step_JobReport.output.report} {params.outdir}/reports/job_{params.tag}.json >> {output.log}
         """
@@ -41,6 +45,8 @@ rule endstep:
 rule all:
     input:
         rules.scram.output,
-	rules.step_RECO.output,
-        rules.step_RECO2NANO.output,
-	rules.endstep.output
+        rules.step_RAW2DIGI.output,
+        rules.step_DQM.output,
+        rules.step_DQM_upload.output,
+        rules.step_RAW2NANO.output,
+        rules.endstep.output

@@ -8,7 +8,9 @@ _sysvalconfig = {
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_B27v1.txt',
             'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_B27v1.json',
             'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_B27v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json'
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json',
+            'trig_scintillator_block':5,
+            'trig_num_blocks':7
         },
     },
     'TB2024': {
@@ -17,17 +19,58 @@ _sysvalconfig = {
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
             'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
             'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v1.json'
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v1.json',
+            'trig_scintillator_block':5,
+            'trig_num_blocks':7
         },
         '2': {
             'fedId':[0],
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
             'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
             'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v2.json'
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v2.json',
+            'trig_scintillator_block':5,
+            'trig_num_blocks':7
+        },
+        '3': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v2.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v3.json',
+            'trig_scintillator_block':5,
+            'trig_num_blocks':7
+        },
+        '4': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v2.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v4.json',
+            'trig_scintillator_block':9,
+            'trig_num_blocks':11
+        },
+        '5': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v3.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v5.json',
+            'trig_scintillator_block':9,
+            'trig_num_blocks':11
+        },
+        '6': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v4.txt',
+            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v3.json',
+            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v3.json',
+            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v6.json',
+            'trig_scintillator_block':9,
+            'trig_num_blocks':11
         },        
     },
 }
+
 
 def getEraConfiguration(era : str) -> dict :
     """gets the appropriate configuration to use from the eras dict"""

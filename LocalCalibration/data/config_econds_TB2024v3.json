@@ -1,0 +1,50 @@
+{
+  "ML-F3WX-IH0014": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-F3WX-IH0016": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-F3WX-IH0017": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },  
+  "ML-F3WX-IH0018": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-F3WX-IH0019": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],    
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-F3WX-IH0020": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-F3WX-IH0015": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1, 1, 1, 1],
+	"CalibrationSC": [0, 0, 0, 0, 0, 0]
+  },
+  "ML-R3WX-42QH00006": {
+	"headerMarker": "0x154",
+	"passthrough": 1,
+	"Gain": [1, 1, 1],
+	"CalibrationSC": [0, 0, 0]
+  }
+}

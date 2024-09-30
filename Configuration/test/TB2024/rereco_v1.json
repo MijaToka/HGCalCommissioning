@@ -1,5 +1,4 @@
 {
-    "OutputDir":"/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/TB2024",
     "CampaignDir":"./campaigns",
     "Tag":"v2",
     "ReRecoEras" : {

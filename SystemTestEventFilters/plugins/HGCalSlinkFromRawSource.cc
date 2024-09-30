@@ -229,19 +229,26 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
 
       if (eventRead) {
         while (rTrgEvent) {
-          // find the trigger event matched to the first DAQ slink
-          if (rTrgEvent->slinkBoe()->eventId() == eventIdVal_ && rTrgEvent->slinkEoe()->bxId() == bxIdVal_ &&
-              rTrgEvent->slinkEoe()->orbitId() == orbitIdVal_) {
+
+	  // find the trigger event matched to the first DAQ slink
+	  bool evMatches(rTrgEvent->slinkBoe()->eventId() == eventIdVal_);
+	  bool bxMatches(rTrgEvent->slinkEoe()->bxId() == bxIdVal_);
+	  bool orbitMatches(rTrgEvent->slinkEoe()->orbitId() == orbitIdVal_);
+	  metaData_->setTrigBlockFlags((!evMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::EVMISMATCH+
+				       (!bxMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::BXMISMATCH+
+				       (!orbitMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::ORBITMISMATCH);
+	  if(evMatches && bxMatches && orbitMatches) {
             reader->readTriggerData(*metaData_, rTrgEvent, trig_num_blocks_, trig_scintillator_block_id_);
+	    metaData_->setTrigBlockFlags(HGCalTestSystemMetaData::TestSystemMetaDataFlags::VALID);
             break;
           } else {
-            edm::LogError("SlinkFromRaw")
-                << "Mismatch in E/B/O counters for the trigger link"
-                << ": expect eventId=" << eventIdVal_ << ", bxId=" << bxIdVal_ << ", orbitId=" << orbitIdVal_
-                << ", got eventId = " << rTrgEvent->slinkBoe()->eventId()
-                << ", bxId = " << rTrgEvent->slinkEoe()->bxId() << ", orbitId=" << rTrgEvent->slinkEoe()->orbitId();
+	    LogDebug("SlinkFromRaw")
+	      << "Mismatch in E/B/O counters for the trigger link"
+	      << ": expect eventId=" << eventIdVal_ << ", bxId=" << bxIdVal_ << ", orbitId=" << orbitIdVal_
+	      << ", got eventId = " << rTrgEvent->slinkBoe()->eventId()
+	      << ", bxId = " << rTrgEvent->slinkEoe()->bxId() << ", orbitId=" << rTrgEvent->slinkEoe()->orbitId();
             if (rTrgEvent->slinkBoe()->eventId() < eventIdVal_) {
-              rTrgEvent = reader->nextEvent();
+              rTrgEvent = reader->nextEvent();	      
               continue;
             } else {
               break;

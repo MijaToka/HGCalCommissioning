@@ -2,15 +2,13 @@ import FWCore.ParameterSet.Config as cms
 
 from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
-options.register('run', None, VarParsing.multiplicity.singleton, VarParsing.varType.int,
-                 "run number")
 options.register('era', None, VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "reconstruction era")
 options.register('skipRecHits', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "skip RecHits table")
 options.parseArguments()
 
-print(f'Starting NANO of Run={options.run} with era={options.era}')
+print(f'Starting NANO with era={options.era} skipRecHits={options.skipRecHits}')
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
 process, _ = initSysValCMSProcess(procname='DQM',era=options.era, maxEvents=options.maxEvents)

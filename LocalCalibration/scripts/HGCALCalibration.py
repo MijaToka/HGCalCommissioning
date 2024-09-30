@@ -8,8 +8,7 @@ import json
 from multiprocessing import Pool
 import sys
 sys.path.append("./")
-from DigiAnalysisUtils import baseHistoFiller
-
+from DigiAnalysisUtils import analyzeSimplePedestal
 
 class HGCALCalibration(ABC):
     """HGCALCalibration is a base class which can be used for procedures which make use of the NANO to fill histograms
@@ -56,38 +55,36 @@ class HGCALCalibration(ABC):
                                  action='store_true')
         self.parser.add_argument("--nanoTag",
                                  help='nano version tag to use, if empty use latest default=%(default)s',
-                                 default='',
-                                 action='store_true')        
+                                 default='', type=str)
         self.addCommandLineOptions(self.parser)
         self.cmdargs = self.parser.parse_args()
-        self.__dict__.update(self.cmdargs.__dict__)
 
         #run will always be appended to the output directory
-        self.output=f'{self.output}/Run{self.run}'
+        self.cmdargs.output=f'{self.cmdargs.output}/Run{self.cmdargs.run}'
         
         #histogram filling
-        if not self.skipHistoFiller:
+        if not self.cmdargs.skipHistoFiller:
 
             #check if upper class has defined an histogram filler
             if not hasattr(self, 'histofiller'):
                 print('Setting base histogram filler has an attribute')
-                setattr(self,'histofiller',baseHistoFiller)
+                setattr(self,'histofiller',analyzeSimplePedestal)
 
             #prepare the jobs (run info#modules, sub-samples, etc.)
             self.prepareHistogramFiller(self.cmdargs.nanoTag)
 
             #launch tasks
             ntasks=len(self.histofill_tasks)        
-            with Pool(self.maxThreads) as p:
+            with Pool(self.cmdargs.maxThreads) as p:
                 task_results=p.map(getattr(self,'histofiller'), self.histofill_tasks)
             print('Histo filling',task_results)
 
         #analysis of histograms
-        rootfiles = glob.glob(f'{self.output}/histofiller/*.root')
+        rootfiles = glob.glob(f'{self.cmdargs.output}/histofiller/*.root')
         tasklist = [ (os.path.splitext(os.path.basename(url))[0], url, self.cmdargs) for url in rootfiles ]
-        with Pool(self.maxThreads) as p:
-            results = p.map(self.analyze, tasklist)
-
+        with Pool(self.cmdargs.maxThreads) as p:
+            results = p.map(self.analyze, tasklist)            
+            
         #crete the corrections based on the analysis results
         jsonurl = self.createCorrectionsFile(results)
         print(f'Corrections stored in {jsonurl}')
@@ -114,39 +111,61 @@ class HGCALCalibration(ABC):
         """steers preparation of the analysis for a run (parse commandline, get run information, prepare output)"""
 
         #prepare output 
-        os.makedirs(self.output + '/histofiller', exist_ok=self.forceRewrite)
+        os.makedirs(self.cmdargs.output + '/histofiller', exist_ok=self.cmdargs.forceRewrite)
 
         #get the run row in the run registry
-        self.runrow = self.readRunRegistry()
+        try:
+            nanodir = self.getNANOFromRunRegistry(nanotag)
+        except Exception as e:
+            print(f'Failed to get info from run registry: {e}')
+            print(f'Fallback on searching directory')
+            nanodir = self.findNANOFrom(rdirlist = [f'{self.cmdargs.input}/Run{self.cmdargs.run}'], nanotag=nanotag )
 
-        #get the appropriate nano version to run on
-        promptdir=self.runrow['Output']
-        basedir=promptdir.replace('/prompt','')
-        nano_versions=[]
-        for v in os.listdir(basedir):
-            if v=='prompt' : continue
-            nanodir=os.path.join(basedir,v)
-            if not os.path.isdir(nanodir): continue
-            if nanotag!='' and v!=nanotag: continue
-            creation_time=os.path.getctime(nanodir)
-            nano_versions.append( (nanodir,creation_time) )
-        if len(nano_versions)==0:
-            raise IOError(f'No nano directories found in {basedir} (preferred tag is {nanotag})')
-
-        #sort by time, get latest
-        nano_versions = sorted(nano_versions, key=lambda x: x[1], reverse=False)
-        nanodir = nano_versions.pop()[0]
         #create tasks
         self.histofill_tasks = self.buildHistoFillerTasks(nanodir)
-
         
-    def readRunRegistry(self) -> pd.core.series.Series:
+        return nanodir
+
+
+    def findNANOFrom(self, rdirlist : list, nanotag : str = ''):
+        """looks for NANO files and pick the latest"""
+
+        nanodirs = []
+        for d in rdirlist:
+            nanos = glob.glob(f'{d}/*/*/NANO*.root')
+            nano_versions=[]
+            for n in nanos:
+                ndir = os.path.dirname(n)
+                nversion = os.path.basename(ndir)
+                creation_time=os.path.getctime(ndir)
+
+                #if a specific version is requested check it matches
+                if nanotag!='' and nversion!=nanotag: continue
+                nano_versions.append( (ndir,creation_time) )            
+            nano_versions = sorted( list(set(nano_versions)), key=lambda x: x[1], reverse=False)
+
+            if len(nano_versions)==0:
+                nanodirs.append(None)
+            else:
+                nanodirs.append(nano_versions.pop()[0])
+
+        #check that at least one was found
+        nmissed = sum([x is None for x in nanodirs])
+        if nmissed>0:
+            print(f'{nmissed} directories have no NANO...')
+            if nmissed == len(rdirlist):
+                raise ValueError(f'No NANO to analyze...')
+
+        return [x for x in nanodirs if not x is None]
+    
+        
+    def getNANOFromRunRegistry(self, nanotag : str) -> pd.core.series.Series:
         """reads the run registry and retrieves the information about this run"""
 
         #check if run registry is valid and open it
-        runregfiles = glob.glob(f'{self.input}/runregistry*')
+        runregfiles = glob.glob(f'{self.cmdargs.input}/runregistry*')
         if len(runregfiles)==0:
-            raise OSError(f"No runregistry files in {self.input}")
+            raise OSError(f"No runregistry files in {self.cmdargs.input}")
         _, runreg_ext = os.path.splitext(runregfiles[0])
         if runreg_ext=='.csv':
             run_registry = pd.read_csv(runregfiles[0],sep='\s+', header='infer')
@@ -156,29 +175,34 @@ class HGCALCalibration(ABC):
             raise IOError(f'Unable to decode runregistry with {runreg_ext} extension')
         
         #get the run
-        mask = (run_registry['Run']==self.run) & (run_registry['RecoValid']==True)
+        mask = (run_registry['Run']==self.cmdargs.run) & (run_registry['RecoValid']==True)
         if mask.sum()==0:
-            raise ValueError(f'Unable to find {self.run} in run registry file')
+            raise ValueError(f'Unable to find {self.cmdargs.run} in run registry file')
 
-        #return the latest one
-        return run_registry.loc[mask].iloc[-1].copy()
+        #look for NANO in the latest UUID
+        return self.findNANOFrom(rdirlist = [run_registry.loc[mask].iloc[-1].copy()], nanotag = nanotag)
 
-    def buildHistoFillerTasks(self, nanodir : str) -> list:
+
+    def buildHistoFillerTasks(self, nanodir : list) -> list:
         """for each module which needs to processed independently a task is created and described in a json file
         the format of the json file is analogous to that proposed in 
         https://root.cern/doc/master/classROOT_1_1RDF_1_1Experimental_1_1RDatasetSpec.html
+        it returns a list of tuples containing the following information
+        (outputdirectory, module name, json used to define the RDataFrame,commandline arguments)
         """
         
         task_list = []
-        
-        flist = glob.glob(nanodir+"/NANO*root")
+
+        #FIXME this may be a list now
+        flist = glob.glob(f'{nanodir[0]}/NANO*root')
+        flist = sorted(flist)
         modules = self.getModulesFromRun(flist[0])
 
         #call the derived class implementation of the method to build the scan parameters
         scanparams_dict = self.buildScanParametersDict(flist,list(modules.keys()))
 
         #with all the information create a task per module
-        for m,(fed,seq) in modules.items():
+        for m,(fed,seq,nerx) in modules.items():
             
             task_spec={'samples':{}}
             for i,f in enumerate(flist):
@@ -186,7 +210,7 @@ class HGCALCalibration(ABC):
                 task_spec['samples'][key] = {
                     'trees' : ['Events'],
                     'files' : [ self.xrootdFileName(f) ],
-                    'metadata' : {'index':i+1, 'typecode':m, 'category':'data', 'fed':fed, 'seq':seq }
+                    'metadata' : {'index':i+1, 'typecode':m, 'category':'data', 'fed':fed, 'seq':seq, 'nerx':nerx }
                 }
 
                 # add extra scan parameters (if any)
@@ -195,10 +219,10 @@ class HGCALCalibration(ABC):
                     task_spec['samples'][key]['metadata'][k]=v
 
             #save json 
-            outjson=f"{self.output}/histofiller/{m}.json"
+            outjson=f"{self.cmdargs.output}/histofiller/{m}.json"
             with open(outjson, "w") as fout: 
                 json.dump(task_spec, fout,  indent = 4)
-            task_list.append( (self.output + '/histofiller', m, outjson) )
+            task_list.append( (self.cmdargs.output + '/histofiller', m, outjson, self.cmdargs) )
 
         #return the location of the tasks
         return task_list
@@ -215,14 +239,20 @@ class HGCALCalibration(ABC):
             module_typecode = k.replace('HGCTypeCodes_','')
 
             #skip if the module is not required
-            if len(self.moduleList)>0 and not module_typecode in self.moduleList:
+            if len(self.cmdargs.moduleList)>0 and not module_typecode in self.cmdargs.moduleList:
                 continue
                         
             #save the required information
             module_idx = v[0][0]
             module_fed = runs['HGCReadout_FED'][0][module_idx]
             module_seq = runs['HGCReadout_Seq'][0][module_idx]
-            modules_dict[module_typecode] = (module_fed,module_seq)
+            if 'HGCReadout_nErx' in runs:
+                module_nerx = runs['HGCReadout_nErx'][0][module_idx]
+            else:
+                #remove once all NANO has this
+                print(f'Using default nErx for {module_typecode}') 
+                module_nerx =  6
+            modules_dict[module_typecode] = (module_fed,module_seq,module_nerx)
              
         return modules_dict
     

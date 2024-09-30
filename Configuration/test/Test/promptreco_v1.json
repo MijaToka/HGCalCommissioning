@@ -1,0 +1,14 @@
+{
+    "OutputDir":"/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/Test",
+    "LocalDir":"/data/hgcalrd/Test",
+    "RecoEra" : { 
+	"Test/v1" : "TB2024/v2",
+	"Test/v2" : "TB2024/v3",
+	"Test/v3" : "TB2024/v5",
+	"Test/v4" : "TB2024/v6"
+    },
+    "Type" : { 
+	"Default" : "/home/hgcalrd/CMSSW/CMSSW_14_1_0_pre4/src/HGCalCommissioning/Configuration/test/TB2024/run_raw2digi_dqm.snake",
+	"Pedestal" : "/home/hgcalrd/CMSSW/CMSSW_14_1_0_pre4/src/HGCalCommissioning/Configuration/test/TB2024/run_raw2digi_dqm_nano_calib.smk"
+    }
+}
