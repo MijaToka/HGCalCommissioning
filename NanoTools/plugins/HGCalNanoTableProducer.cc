@@ -21,6 +21,7 @@
 #include "DataFormats/ForwardDetId/interface/HGCalDetId.h"
 //Digi information
 #include "DataFormats/HGCalDigi/interface/HGCalDigiHost.h"
+#include "DataFormats/HGCalDigi/interface/HGCalRawDataDefinitions.h"
 //RecHit information
 #include "DataFormats/HGCalRecHit/interface/HGCalRecHitHost.h"
 //mapping information
@@ -97,8 +98,8 @@ private:
       int32_t ndigis = digis_view.metadata().size();
       assert(ndigis == ndenseIndices);
 
-      auto outdigi = std::make_unique<nanoaod::FlatTable>(ndigis, "HGCDigi", false);
-      outdigi->setDoc("HGC DIGIS");
+      //auto outdigi = std::make_unique<nanoaod::FlatTable>(ndigis, "HGCDigi", false);
+      //outdigi->setDoc("HGC DIGIS");
       //temporary hack
       //digi flattable
       std::vector<uint8_t> tctp(ndigis), chType(ndigis);
@@ -107,26 +108,51 @@ private:
       std::vector<int> chI1(ndigis), chI2(ndigis), modI1(ndigis), modI2(ndigis);
       std::vector<bool> isSiPM(ndigis);
 
+      int ngooddigis = 0;
       for (int32_t i = 0; i < ndigis; i++) {
-        tctp[i] = digis_view.tctp()[i];
-        adc[i] = digis_view.adc()[i];
-        adcm1[i] = digis_view.adcm1()[i];
-        tot[i] = digis_view.tot()[i];
-        toa[i] = digis_view.toa()[i];
-        cm[i] = digis_view.cm()[i];
-        flags[i] = digis_view.flags()[i];
-        channel[i] = denseIndexInfo_view.chNumber()[i];
-        fedId[i] = denseIndexInfo_view.fedId()[i];
-        fedReadoutSeq[i] = denseIndexInfo_view.fedReadoutSeq()[i];
+        if (digis_view.flags()[i] == hgcal::DIGI_FLAG::NotAvailable) continue;
+        tctp[ngooddigis] = digis_view.tctp()[i];
+        adc[ngooddigis] = digis_view.adc()[i];
+        adcm1[ngooddigis] = digis_view.adcm1()[i];
+        tot[ngooddigis] = digis_view.tot()[i];
+        toa[ngooddigis] = digis_view.toa()[i];
+        cm[ngooddigis] = digis_view.cm()[i];
+        flags[ngooddigis] = digis_view.flags()[i];
+        channel[ngooddigis] = denseIndexInfo_view.chNumber()[i];
+        fedId[ngooddigis] = denseIndexInfo_view.fedId()[i];
+        fedReadoutSeq[ngooddigis] = denseIndexInfo_view.fedReadoutSeq()[i];
         uint32_t cellInfoIdx = denseIndexInfo_view.cellInfoIdx()[i];
-        chType[i] = cellInfo_view.t()[cellInfoIdx];
-        chI1[i] = cellInfo_view.i1()[cellInfoIdx];
-        chI2[i] = cellInfo_view.i2()[cellInfoIdx];
+        chType[ngooddigis] = cellInfo_view.t()[cellInfoIdx];
+        chI1[ngooddigis] = cellInfo_view.i1()[cellInfoIdx];
+        chI2[ngooddigis] = cellInfo_view.i2()[cellInfoIdx];
         uint32_t modInfoIdx = denseIndexInfo_view.modInfoIdx()[i];
-        isSiPM[i] = moduleInfo_view.isSiPM()[modInfoIdx];
-        modI1[i] = moduleInfo_view.i1()[modInfoIdx];
-        modI2[i] = moduleInfo_view.i2()[modInfoIdx];
+        isSiPM[ngooddigis] = moduleInfo_view.isSiPM()[modInfoIdx];
+        modI1[ngooddigis] = moduleInfo_view.i1()[modInfoIdx];
+        modI2[ngooddigis] = moduleInfo_view.i2()[modInfoIdx];
+
+        ngooddigis++;
       }
+
+      auto outdigi = std::make_unique<nanoaod::FlatTable>(ngooddigis, "HGCDigi", false);
+      outdigi->setDoc("HGC DIGIS");
+
+      tctp.resize(ngooddigis);
+      adc.resize(ngooddigis);
+      adcm1.resize(ngooddigis);
+      tot.resize(ngooddigis);
+      toa.resize(ngooddigis);
+      cm.resize(ngooddigis);
+      flags.resize(ngooddigis);
+      channel.resize(ngooddigis);
+      fedId.resize(ngooddigis);
+      fedReadoutSeq.resize(ngooddigis);
+      chType.resize(ngooddigis);
+      chI1.resize(ngooddigis);
+      chI2.resize(ngooddigis);
+      isSiPM.resize(ngooddigis);
+      modI1.resize(ngooddigis);
+      modI2.resize(ngooddigis);
+
       outdigi->addColumn<uint16_t>("tctp", tctp, "Tc/Tp flags (2b)");
       outdigi->addColumn<uint16_t>("adc", adc, "adc measurement");
       outdigi->addColumn<uint16_t>("adcm1", adcm1, "adc measurement in BX-1");
@@ -150,6 +176,10 @@ private:
     //rechit flattable
     if(!skipRecHits_) {
       
+      // tempo: add digis_view for DIGI_FLAG
+      const auto& digis = iEvent.get(digisToken_);
+      auto const& digis_view = digis.const_view();
+
       //retrieve rechits and ensure size matches that of dense indices
       const auto& rechits = iEvent.get(rechitsToken_);
       auto const& rechits_view = rechits.const_view();
@@ -158,23 +188,39 @@ private:
       //all SoA must match in size otherwise we are in trouble
       assert(nrechits == ndenseIndices);
 
-      auto outhit = std::make_unique<nanoaod::FlatTable>(nrechits, "HGCHit", false);
-      outhit->setDoc("HGC RecHits");
+      //auto outhit = std::make_unique<nanoaod::FlatTable>(nrechits, "HGCHit", false);
+      //outhit->setDoc("HGC RecHits");
       std::vector<double> energy(nrechits), time(nrechits);
       std::vector<float> x(nrechits), y(nrechits);
       std::vector<int> layer(nrechits);
       std::vector<uint16_t> rechitflags(nrechits);
       std::vector<bool> zSide(nrechits);
+
+      // tempo: use DIGI_FLAG ---> will be changed to RECHIT_FLAG once produced in Calibration step
+      int ngoodrechits = 0;
       for (int32_t i = 0; i < nrechits; i++) {
-        energy[i] = rechits_view.energy()[i];
-        time[i] = rechits_view.time()[i];
-        rechitflags[i] = rechits_view.flags()[i];
-        x[i] = denseIndexInfo_view.z()[i];
-        y[i] = denseIndexInfo_view.y()[i];
+        if (digis_view.flags()[i] == hgcal::DIGI_FLAG::NotAvailable) continue;
+        energy[ngoodrechits] = rechits_view.energy()[i];
+        time[ngoodrechits] = rechits_view.time()[i];
+        x[ngoodrechits] = denseIndexInfo_view.z()[i];
+        y[ngoodrechits] = denseIndexInfo_view.y()[i];
         HGCalDetId detId(denseIndexInfo_view.detid()[i]);
-        layer[i] = detId.layer();
-        zSide[i] = detId.zside();
+        layer[ngoodrechits] = detId.layer();
+        zSide[ngoodrechits] = detId.zside();
+
+        ngoodrechits++;
       }
+
+      auto outhit = std::make_unique<nanoaod::FlatTable>(ngoodrechits, "HGCHit", false);
+      outhit->setDoc("HGC RecHits");
+
+      energy.resize(ngoodrechits);
+      time.resize(ngoodrechits);
+      x.resize(ngoodrechits);
+      y.resize(ngoodrechits);
+      layer.resize(ngoodrechits);
+      zSide.resize(ngoodrechits);      
+
       outhit->addColumn<double>("energy", energy, "calibrated energy");
       outhit->addColumn<double>("time", time, "time");
       outhit->addColumn<uint16_t>("flags", rechitflags, "rec hit quality flags");
