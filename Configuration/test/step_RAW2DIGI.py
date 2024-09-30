@@ -18,11 +18,16 @@ options.parseArguments()
 # get the options
 import json
 import rich
+import glob
 run = options.run
 lumi = options.lumi
 era = options.era
-inputFiles = options.files
-inputTrigFiles = options.inputTrigFiles
+inputFiles = [ glob.glob(url) for url in options.files]
+inputTrigFiles = [ glob.glob(url) for url in options.inputTrigFiles]
+if len(inputFiles) != len(inputTrigFiles):
+    raise ValueError('Number of input files does not match trigger files!!!')
+if len(inputFiles)<0:
+    raise ValueError('Missing input files')
 print(f'Starting RAW2DIGI of Run={run} Lumi={lumi} with era={era}')
 print(f'\t files={inputFiles}')
 print(f'\t trigger files={inputTrigFiles}')
@@ -32,19 +37,24 @@ rich.print(yamls)
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
 process, eraConfig = initSysValCMSProcess( procname='RAW2DIGI', era=era, maxEvents=options.maxEvents)
-    
+
+print(f'Era = {era} has the following config')
+print(eraConfig)
+
 # INPUT
 process.maxEvents = cms.untracked.PSet(input=cms.untracked.int32(options.maxEvents))
 process.source = cms.Source(
-  "HGCalSlinkFromRawSource",
-  isRealData=cms.untracked.bool(True),
-  runNumber=cms.untracked.uint32(run),
-  firstLumiSection=cms.untracked.uint32(lumi),
-  maxEventsPerLumiSection=cms.untracked.int32(-1),
-  useL1EventID=cms.untracked.bool(True),
-  fedIds=cms.untracked.vuint32(*eraConfig['fedId']),
-  inputs=cms.untracked.vstring(*inputFiles),
-  trig_inputs=cms.untracked.vstring(*inputTrigFiles),
+    "HGCalSlinkFromRawSource",
+    isRealData=cms.untracked.bool(True),
+    runNumber=cms.untracked.uint32(run),
+    firstLumiSection=cms.untracked.uint32(lumi),
+    maxEventsPerLumiSection=cms.untracked.int32(-1),
+    useL1EventID=cms.untracked.bool(True),
+    fedIds=cms.untracked.vuint32(*eraConfig['fedId']),
+    inputs=cms.untracked.vstring(*inputFiles),
+    trig_inputs=cms.untracked.vstring(*inputTrigFiles),
+    trig_num_blocks=cms.untracked.uint32(eraConfig['trig_num_blocks']),
+    trig_scintillator_block_id=cms.untracked.uint32(eraConfig['trig_scintillator_block'])
 )
 process.rawDataCollector = cms.EDAlias(
   source=cms.VPSet(

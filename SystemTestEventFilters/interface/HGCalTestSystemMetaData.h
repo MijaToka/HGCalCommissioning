@@ -5,23 +5,27 @@
 
 class HGCalTestSystemMetaData {
 public:
+
+  enum TestSystemMetaDataFlags { VALID=0, EVMISMATCH=1, BXMISMATCH=2, ORBITMISMATCH=4, UKNOWN=32 };
+  
   HGCalTestSystemMetaData(int trigType, int trigSubType, int trigTime, int trigWidth)
       : trigType_(trigType),
         trigSubType_(trigSubType),
         trigTime_(trigTime),
         trigWidth_(trigWidth),
-        injgain_(0),
-        injcalib_(0) {}
+        trigBlockFlags_(TestSystemMetaDataFlags::VALID) {
+  }
 
-  HGCalTestSystemMetaData() : HGCalTestSystemMetaData(0, 0, 0, 0) {}
+  HGCalTestSystemMetaData() : HGCalTestSystemMetaData(0, 0, 0, 0) { setTrigBlockFlags(TestSystemMetaDataFlags::UKNOWN); }
 
+  void setTrigBlockFlags(int flags) { trigBlockFlags_=flags; }
+  
   ~HGCalTestSystemMetaData() {}
-
+  
   uint32_t trigType_, trigSubType_;
   uint32_t trigTime_;
   uint32_t trigWidth_;
-  char injgain_;
-  uint32_t injcalib_;
+  uint32_t trigBlockFlags_;
 };
 
 #endif

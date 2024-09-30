@@ -3,39 +3,15 @@ import os
 import itertools
 import json
 import gzip
-try:
-    from HGCalCommissioning.LocalCalibration.JSONEncoder import CompactJSONEncoder
-except ImportError:
-    sys.path.append('./python/')
-    from JSONEncoder import CompactJSONEncoder
+import re
 
-_baseHistoBinDefs = {
-    'adcvscm':(200,49.5,249.5,200,149.5,349.5),
-    'adc':(1024,-0.5,1023.5),
-    'adcm1':(1024,-0.5,1023.5),
-    'toa':(1024,-0.5,1023.5),
-    'tot':(4096,-0.5,4095.5),
-    'adcm1scan':(1024,-0.5,1023.5),
-    'adcscan':(1024,-0.5,1023.5),
-    'toascan':(1024,-0.5,1023.5),
-    'totscan':(4096,-0.5,4095.5),
-}
-    
-def baseHistoFiller(args, binDefs : dict =_baseHistoBinDefs):
-    """
-    a base method to fill histograms which are common in most of the runs dedicated to extract baseline constants for the offline and online
-    the method signature is such that it can be dispatched using a pool
-    args is a tuple containing output directory, the module to select and the specification of the tasks for RDataFrame
-    binDefs is a dict containing the bin definitions
-    NOTE: as the histograms are heavy a single thread is used otherwise mem explodes with copies...
-    an alternative would be to use boost histograms and Josh Bendavid's narf
-    """
+def defineDigiDataFrameFromSpecs(specs, attachProgressBar=True):
+    """defines the dataframe to be used for the analysis of DIGIs in NANOAOD"""
 
-    outdir, module, task_spec = args
-    
     #start RDataFrame from specifications
-    rdf = ROOT.RDF.Experimental.FromSpec(task_spec)
-    ROOT.RDF.Experimental.AddProgressBar(rdf)
+    rdf = ROOT.RDF.Experimental.FromSpec(specs)
+    if attachProgressBar:
+        ROOT.RDF.Experimental.AddProgressBar(rdf)
     
     #filter out data for the fed/readout sequence corresponding to a single module
     rdf = rdf.DefinePerSample("ix", 'rdfsampleinfo_.GetI("index")') \
@@ -51,58 +27,162 @@ def baseHistoFiller(args, binDefs : dict =_baseHistoBinDefs):
              .Define('chtypeadc',     'HGCDigi_chType[maskadc]') \
              .Define('adcm1',         'HGCDigi_adcm1[maskadc]') \
              .Define('adc',           'HGCDigi_adc[maskadc]') \
-             .Redefine('adc',         '(chtypeadc!=0)*adc+(chtypeadc==0)*adcm1') \
-             .Define('cm',            'HGCDigi_cm[maskadc]') \
+             .Define('modulecm',      'HGCDigi_cm[maskadc]') \
+             .Define('cm2',           'commonMode(modulecm,2)') \
+             .Define('cm4',           'commonMode(modulecm,4)') \
+             .Define('cmall',         'commonMode(modulecm,-1)') \
              .Define('chadc',         'HGCDigi_channel[maskadc]') \
+             .Define('nchadc',        'Sum(maskadc)')\
+             .Define('nchtot',        'Sum(masktot)')\
+             .Define('nchtoa',        'Sum(masktoa)')\
              .Define('tot',           'HGCDigi_tot[masktot]') \
              .Define('chtot',         'HGCDigi_channel[masktot]') \
              .Define('toa',           'HGCDigi_toa[masktoa]') \
              .Define('chtoa',         'HGCDigi_channel[masktoa]')
-    #NOTE: Calibration channels should not need the ADC assigment from ADC-1 in ROCv3b!!!
-    #NOTE: We probably should define goodflags for toa and ADC-1 using the HGC_digiflags so that the histograms
-    #below are properly filled
+
+    #NOTE: We probably should define goodflags for toa and ADC-1 using the HGC_digiflags so that the histograms below are properly filled
+    #NOTE: trigger type should be used for NZS
     
-    profiles=[]
-    nch=222 #NOTE: fix me, should be in the task_spec depending on the module
-    chbinning=(nch,-0.5,nch-0.5)
-    npts=1  #NOTE: fix me, should be read from the task_spec depending on the scan type
-    scanbinning=(npts,-0.5, npts-0.50)
-    if npts>1:
-        profiles += [
-            rdf.Histo3D(("adcm1scan", 'Scan point;ADC(BX-1);Channel', *ptbinning, *chbinning, *binDefs['adcm1scan']), "ix", "chadc", "adcm1"),
-            rdf.Histo3D(("adcscan",   'Scan point;ADC;Channel',       *ptbinning, *chbinning, *binDefs['adcscan']),   "ix", "chadc", "adc"),
-            rdf.Histo3D(("totscan",   'Scan point;TOT;Channel',       *ptbinning, *chbinning, *binDefs['totscan']),   "ix", "chtot", "tot"),
-            rdf.Histo3D(("toascan",   'Scan point;TOA;Channel',       *ptbinning, *chbinning, *binDefs['toascan']),   "ix", "chtoa", "toa"),
+    return rdf
+
+def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
+    """
+    a base method to fill histograms which are common in most of the runs dedicated to extract baseline constants for the offline and online
+    the method signature is such that it can be dispatched using a pool
+    args is a tuple containing output directory, the module to select and the specification of the tasks for RDataFrame
+    NOTE: as the histograms are heavy a single thread is used otherwise mem explodes with copies...
+    an alternative would be to use boost histograms and Josh Bendavid's narf
+    """
+
+    ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
+    rdf=defineDigiDataFrameFromSpecs(task_spec)
+    if len(filter_cond)>0:
+        rdf = rdf.Filter(filter_cond)
+
+    #read #pts and #eErx from first task
+    with open(task_spec) as json_data:
+        samples = json.load(json_data)['samples']
+    nerx = samples['data1']['metadata']['nerx']
+    nch = nerx*37
+
+    #run a mini scan to determine appropriate bounds
+    minirdf = defineDigiDataFrameFromSpecs(task_spec)
+    minirdf = minirdf.Range(1000)
+    if len(filter_cond)>0:
+        minirdf = minirdf.Filter(filter_cond)
+        
+    obslist = ['adc', 'cm2', 'cm4', 'cmall', 'toa', 'tot']
+    obsbounds  = [minirdf.Min(x) for x in obslist]
+    obsbounds += [minirdf.Max(x) for x in obslist]
+    ROOT.RDF.RunGraphs(obsbounds)
+    bindefs={}
+    for i,obs in enumerate(obslist):
+        minobs = int(obsbounds[i].GetValue()) - 0.5            
+        maxobs = int(obsbounds[i+len(obslist)].GetValue()) + 0.5
+        #if no values to determine min/max the difference will be inf
+        #conversion to int is impossible
+        #limit also cases where the number of bins is 0 or larger than 12b
+        try:
+            nobs = int(maxobs - minobs)
+            if nobs<1 or nobs>4095 :
+                raise ValueError
+        except:
+            continue
+        bindefs[obs]=(nobs,minobs,maxobs)
+    print(f'Bins determined from sub-sample: {bindefs}')
+
+    #declare histograms
+    graphlist=[]
+    chbinning=(nch,-0.5,nch-0.5)    
+    if 'adc' in bindefs:
+        graphlist += [
+            rdf.Histo2D(("adcm1",      ';ADC(BX-1);Channel', *chbinning, *bindefs['adc']), "chadc", "adcm1"),
+            rdf.Histo2D(("adc",        ';ADC;Channel',       *chbinning, *bindefs['adc']), "chadc", "adc"),
+            rdf.Histo3D(("adcvsadcm1", ';Channel;ADC-1;ADC', *chbinning, *bindefs['adc'], *bindefs['adc']), "chadc", "adcm1", "adc")
         ]
-    else:
-        profiles += [
-            rdf.Histo3D(("adcvscm", ';Channel;ADC;CM',    *chbinning, *binDefs['adcvscm']), "chadc", "adc", "cm"),
-            rdf.Histo2D(("adcm1",   ';ADC(BX-1);Channel', *chbinning, *binDefs['adcm1']),   "chadc", "adcm1"),
-            rdf.Histo2D(("adc",     ';ADC;Channel',       *chbinning, *binDefs['adc']),     "chadc", "adc"),
-            rdf.Histo2D(("tot",     ';TOT;Channel',       *chbinning, *binDefs['tot']),     "chtot", "tot"),
-            rdf.Histo2D(("toa",     ';TOA;Channel',       *chbinning, *binDefs['toa']),     "chtoa", "toa"),
-        ]    
-    ROOT.RDF.RunGraphs(profiles)
-    
-    #write histograms to file
-    rfile=f'{outdir}/{module}.root'
+    if 'cmall' in bindefs:
+        graphlist += [
+            rdf.Histo3D(("adcvscm2",   ';Channel;CM2;ADC',   *chbinning, *bindefs['cm2'],   *bindefs['adc']), "chadc", "cm2",   "adc"),
+            rdf.Histo3D(("adcvscm4",   ';Channel;CM4;ADC',   *chbinning, *bindefs['cm4'],   *bindefs['adc']), "chadc", "cm4",   "adc"),
+            rdf.Histo3D(("adcvscmall", ';Channel;CMall;ADC', *chbinning, *bindefs['cmall'], *bindefs['adc']), "chadc", "cmall", "adc"),
+        ]
+    if 'tot' in bindefs:
+        graphlist += [
+            rdf.Histo2D(("tot", ';TOT;Channel', *chbinning, *bindefs['tot']), "chtot", "tot")
+        ]
+    if 'toa' in bindefs:
+        graphlist += [
+            rdf.Histo2D(("toa", ';TOA;Channel', *chbinning, *bindefs['toa']), "chtoa", "toa"),
+        ]
+
+    #run and save
+    ROOT.RDF.RunGraphs(graphlist)
+    histolist = [obj.GetValue() for obj in graphlist]
+    fillHistogramsAndSave(histolist = histolist, rfile = f'{outdir}/{module}.root')    
+    return True
+
+
+def scanHistoFiller(outdir, module, task_spec, filter_conds : dict):
+    """
+    a base method to fill histograms in a scan (each sub-task in task_spec) is treated as a scan point
+    filter_conds is a dict used to define different sub-samples for which the histos will be filled
+    """
+
+    #read #pts and #eErx from first task
+    with open(task_spec) as json_data:
+        samples = json.load(json_data)['samples']
+    npts = len(samples)
+    nerx = samples['data1']['metadata']['nerx']
+    nch = nerx*37
+
+    #fill a histo with the scan info
+    ptbinning=(npts,0.5,npts+0.5)
+    infobinning = (2,0,2)
+    scanInfoHist = ROOT.TH2F('scaninfo', 'Scan point;Parameters', *ptbinning, *infobinning)
+    scanInfoHist.GetYaxis().SetBinLabel(1,'Run')
+    scanInfoHist.GetYaxis().SetBinLabel(2,'LS')
+    for ls,lsinfo in samples.items():
+        idx = lsinfo["metadata"]["index"]
+        run, ls = re.findall('.*/NANO_(\d+)_(\d+).root',lsinfo['files'][0])[0]
+        scanInfoHist.SetBinContent(idx,1,int(run))
+        scanInfoHist.SetBinContent(idx,2,int(ls))
+
+    #declare histograms (per sample filtered)
+    chbinning=(nch,-0.5,nch-0.5)    
+    bin10b = (1024,-0.5,1023.5)
+    bin12b = (4096,-0.5,4095.5)
+    ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
+    rdf=defineDigiDataFrameFromSpecs(task_spec)
+    graphlist=[]
+    for k,filterval in filter_conds.items():
+        filtered_rdf = rdf.Filter(filterval)
+        graphlist = [            
+            filtered_rdf.Histo3D((f"adc_{k}",  'Scan point;ADC;Channel', *ptbinning, *chbinning, *bin10b), "ix", "chadc", "adc"),
+            filtered_rdf.Histo3D((f"nadc_{k}", 'Scan point;ADC;Channel', *ptbinning, *chbinning, *bin10b), "ix", "chadc", "nchadc"),
+            filtered_rdf.Histo3D((f"tot_{k}",  'Scan point;TOT;Channel', *ptbinning, *chbinning, *bin12b), "ix", "chtot", "tot"),
+            filtered_rdf.Histo3D((f"ntot_{k}", 'Scan point;TOT;Channel', *ptbinning, *chbinning, *bin12b), "ix", "chtot", "nchtot"),
+            filtered_rdf.Histo3D((f"toa_{k}",  'Scan point;TOA;Channel', *ptbinning, *chbinning, *bin10b), "ix", "chtoa", "toa"),
+            filtered_rdf.Histo3D((f"ntoa_{k}", 'Scan point;TOA;Channel', *ptbinning, *chbinning, *bin10b), "ix", "chtoa", "nchtoa"),
+        ]
+
+    #run and save
+    ROOT.RDF.RunGraphs(graphlist)
+    histolist = [obj.GetValue() for obj in graphlist] + [scanInfoHist]
+    fillHistogramsAndSave(histolist = histolist, rfile = f'{outdir}/{module}.root')    
+    return True
+
+def fillHistogramsAndSave(histolist : list, rfile : str):
+    """saves list of histograms in ROOT file"""
+
+    #write histograms to file    
     fOut=ROOT.TFile.Open(rfile,'RECREATE')
     fOut.cd()
-    #NOTE: fixme this is disabled for the moment as we need to adapt with some sort of scan
-    #parHisto.SetDirectory(fOut)
-    #parHisto.Write()
-    #channelHisto.SetDirectory(fOut)
-    #channelHisto.Write()
-    for p in profiles:
-        obj=p.GetValue()
+    for obj in histolist:
         obj.SetDirectory(fOut)
         obj.Write()
     fOut.Close()
     print(f'Histograms available in {rfile}')
     
-    return True
-
-
 def profile3DHisto(url, hname):
 
     '''this method analyzes a 3D histogram and summarizes its momenta assuming X is the profiling variable'''
@@ -160,16 +240,3 @@ def profile2DHisto(url, hname):
     fIn.Close()
     
     return cor_values
-
-
-def saveAsJson(url : str, results : dict, compress=False):
-    """takes care of saving to a json file"""
-    
-    if compress:
-        json_str = json.dumps(results,cls=CompactJSONEncoder) + "\n"
-        json_bytes = json_str.encode('utf-8')
-        with gzip.open(url, 'w') as outfile:
-            outfile.write(json_bytes)
-    else:
-        with open(url,'w') as outfile:
-            json.dump(results,outfile,cls=CompactJSONEncoder,sort_keys=False,indent=2)

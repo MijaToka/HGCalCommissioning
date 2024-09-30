@@ -70,9 +70,11 @@ RooWorkspace *defineMIPFitWorkspace(float xmin=-10,float xmax=50,
   RooRealVar x("x", "x", xmin, xmax);
  
   // noise modelled with a gaussian
-  RooRealVar loc("loc", "pedestal",pedestalmin,pedestalmax);
-  RooRealVar sigma("sigma", "noise", noisemin,noisemax);
+  RooRealVar loc("loc", "pedestal", pedestalmin, pedestalmax);
+  RooRealVar sigma("sigma", "noise", noisemin, noisemax);
   RooGaussian noise_pdf("noise_pdf", "Noise component", x, loc, sigma);
+  RooRealVar loc0("loc0","pedestal0", 0.);
+  RooGaussian noise0_pdf("noise_pdf", "Noise component", x, loc0, sigma);
  
   // signal pdf : landau (x) gauss
   RooRealVar mpv1("mpv", "MPV landau", mpvlmin, mpvlmax);
@@ -80,8 +82,8 @@ RooWorkspace *defineMIPFitWorkspace(float xmin=-10,float xmax=50,
   RooRealVar sigmal("sigmal", "Width landau", 1, 1, mpvlmax*2);
   RooLandau singlemip_landau("singlemip_landau", "Sungle MIP Landau PDF", x, mpv1, sigmal);
   RooLandau doublemip_landau("doublemip_landau", "Double MIP Landau PDF", x, mpv2, sigmal);
-  RooFFTConvPdf singlemip_pdf("singlemip_pdf", "single mip (X) gaus", x, singlemip_landau, noise_pdf);
-  RooFFTConvPdf doublemip_pdf("doublemip_pdf", "single mip (X) gaus", x, doublemip_landau, noise_pdf);
+  RooFFTConvPdf singlemip_pdf("singlemip_pdf", "single mip (X) gaus", x, singlemip_landau, noise0_pdf);
+  RooFFTConvPdf doublemip_pdf("doublemip_pdf", "single mip (X) gaus", x, doublemip_landau, noise0_pdf);
   
   // Sum the signal components into a composite signal pdf
   RooRealVar singlemip_frac("singlemip_frac", "fraction of single mip in signal",singlemip_fracmin,1.);

@@ -80,7 +80,7 @@ public:
     //built the table
     //track the typecodes corresponding to each index
     uint32_t nmodules = moduleIndex.getMaxModuleSize();
-    std::vector<uint32_t> fed(nmodules), seq(nmodules),plane(nmodules), i1(nmodules), i2(nmodules);    
+    std::vector<uint32_t> fed(nmodules), seq(nmodules),plane(nmodules), i1(nmodules), i2(nmodules), nErx(nmodules);    
     std::vector<bool> isSiPM(nmodules), zside(nmodules);
     typedef std::pair<std::string, std::vector<uint32_t> > TypeCode2Idx_t;
     std::vector<TypeCode2Idx_t> typeCodeTreeIndices;
@@ -100,6 +100,7 @@ public:
       plane[idx] = imod.plane();
       i1[idx] = imod.i1();
       i2[idx] = imod.i2();
+      nErx[idx] = moduleIndex.getMaxERxSize(fed[idx], seq[idx]);
       idx++;
     }
     
@@ -112,6 +113,7 @@ public:
     out_readout->addColumn<uint32_t>("Layer", plane, "Layer number");
     out_readout->addColumn<uint32_t>("i1", i1, "Location index 1 (u or i-ring)");
     out_readout->addColumn<uint32_t>("i2", i2, "Location index 2 (v or i-phi)");
+    out_readout->addColumn<uint32_t>("nErx", nErx, "nErx");
     iRun.put(std::move(out_readout), tableName_);
 
     //the type codes for each entry in the table above

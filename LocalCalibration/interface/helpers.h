@@ -9,23 +9,6 @@ using rvec_f = const RVec<float>;
 using rvec_i = const RVec<int>;
 using rvec_b = const RVec<bool>;
 
-
-/**
-    @short assigns the CM indices to use for each channel based on a match between the module and erx numbers
-*/
-rvec_f assignAveragedCM(const rvec_i &ch_module, const rvec_i &ch_erx,const rvec_i &cm_module, const rvec_i &cm_erx, const rvec_i &cm) {
-    
-  std::vector<float> avgcm(ch_erx.size(),0.);
-
-  for(size_t i=0; i<ch_erx.size(); i++){
-    auto mask = (cm_erx == ch_erx[i]) && (cm_module==ch_module[i]);
-    //assert( Sum(mask)==2 );
-    avgcm[i] = Mean( cm[mask] );
-  }
-  
-  return rvec_f(avgcm.begin(),avgcm.end());
-}
-
 /**
    @short selects the neighouring cells around a seed with a delta (u,v) radius
  */
@@ -94,6 +77,61 @@ rvec_f sumOverRoc(const rvec_i &ch, const rvec_f &en, int mode) {
 
   return rvec_f(sums.begin(), sums.end());
 }
+
+/**
+   @short computes the common mode noise in different flavours
+   1. CM2 = (CM0+CM1)/2 in the same eRx (mode=2)
+   2. CM4 = (CM0+CM1+CM2+CM3)/4 in the same ROC (mode=4)
+   3. CM* =(CM0+CM1+CM2+CM3+...)/N in the same module (mode=-1)
+   it is assumed that the vector of cm is already filtered within a single module
+ */
+rvec_f commonMode(const rvec_i &cm, int mode=2) {
+
+  assert((mode==2 || mode==4 || mode==-1) && cm.size()%37==0);
+
+  //
+  int nErx = int(cm.size()/37);
+
+  //build the sums to assign per eRx
+  std::vector<float> cmavg(nErx,0.);
+  std::vector<float> navg(nErx,0.);
+  for(int i=0; i<nErx; i++) {
+
+    cmavg[i] += cm[i*37];
+    navg[i] += 2;
+
+    //sum all eRx
+    if(mode==-1) {
+      for(int j=0; j<nErx; j++) {
+        if(i==j) continue;
+        cmavg[i] += cm[j*37];
+        navg[i] += 2;
+      }      
+    }
+
+    //sum in the same ROC
+    if(mode==4) {      
+      if(i%2==1) {
+        cmavg[i] += cm[(i-1)*37];
+        navg[i] += 2;
+      }
+      if(i%2==0 && i<nErx-1) {
+        cmavg[i] += cm[(i+1)*37];
+        navg[i] += 2;
+      }
+    }
+  }//end for
+
+  //assign the CM to use per readout channel
+  std::vector<float> chcm(cm.size(),0.);
+  for(size_t i=0; i<cm.size(); i++){    
+    int iErx( int(i/37) );
+    chcm[i] = cmavg[iErx] / navg[iErx];
+  }
+
+  return rvec_f(chcm.begin(), chcm.end());
+}
+
 
 
 #endif
