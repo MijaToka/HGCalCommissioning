@@ -67,4 +67,5 @@ process.dumpFRD = cms.EDAnalyzer("DumpFEDRawDataProduct",
                               feds=cms.untracked.vint32(options.fedId),
                               dumpPayload=cms.untracked.bool(True)
                               )
+
 process.p = cms.Path( process.dumpFRD )

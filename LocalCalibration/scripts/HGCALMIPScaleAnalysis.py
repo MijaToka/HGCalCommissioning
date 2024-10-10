@@ -101,16 +101,6 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
                             action='store_true',
                             help='save hexplots for the pedestals')
 
-    def buildScanParametersDict(self,file_list,module_list):
-        """a  MIP scan analysis doesn't have any parameters scanned, return lists of empty dicts"""
-        nfiles = len(file_list)
-        scanparams={}
-        for m in module_list:
-            scanparams[m] = [
-                {} for i in range(nfiles)
-            ]
-        return scanparams
-
     @staticmethod
     def analyze(args):
         """steers the fitting of the mip peaks and the collection of results"""
@@ -152,7 +142,6 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
             typecode = r.pop('Typecode')
             histos = r.pop('Histos')
             correctors[typecode]=r
-        
         jsonurl = f'{self.cmdargs.output}/mipfits.json'
         saveAsJson(jsonurl, correctors)
 

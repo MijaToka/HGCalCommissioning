@@ -98,16 +98,6 @@ class HGCALPedestalsClosure(HGCALCalibration):
     def addCommandLineOptions(self,parser):
         parser.set_defaults(output='calibrations_closure')
 
-    def buildScanParametersDict(self,file_list,module_list):
-        """return lists of empty dicts"""
-        nfiles = len(file_list)
-        scanparams={}
-        for m in module_list:
-            scanparams[m] = [
-                {} for i in range(nfiles)
-            ]
-        return scanparams
-
     @staticmethod
     def analyze(args):
         """profiles the Channel vs ADC vs CM histogram to find pedestals to use"""

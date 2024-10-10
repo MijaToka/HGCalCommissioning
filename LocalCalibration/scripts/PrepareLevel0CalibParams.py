@@ -32,7 +32,6 @@ def buildLevel0CalibParams(input_json : dict, gainidx : int, cm : str) -> dict:
     level0_calib[typecode]['Noise'][gainidx] = mdata['ADC_rms'].copy()
     level0_calib[typecode]['CM_ped'][gainidx] = mdata[f'cm{cm}_ped'].copy()
     level0_calib[typecode]['CM_slope'][gainidx] = mdata[f'cm{cm}_slope'].copy()
-      
   return level0_calib
   
   

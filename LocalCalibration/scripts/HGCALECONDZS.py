@@ -188,7 +188,6 @@ def main():
     parser.add_argument("-F", "--factor",
                         help='factor for scan: factor * noise',
                         default=1, type=int)
-    
     args = parser.parse_args()
     
     #build input for ECON-D configuration of the ZS processor
