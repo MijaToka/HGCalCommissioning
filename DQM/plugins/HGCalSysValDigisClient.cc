@@ -323,7 +323,6 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     if (econd.exception()==3) econdQualityH_->Fill(imod, 11); // wrongHeaderMarker
     if (econd.exception()==4) econdQualityH_->Fill(imod, 12); // payloadOverflows
     if (econd.exception()==5) econdQualityH_->Fill(imod, 13); // payloadMismatches
-
     if (econd.exception()==5 ||
 	htflags>0 ||
 	eboflags>0 ||

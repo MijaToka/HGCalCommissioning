@@ -37,32 +37,15 @@ class HGCALPedestals(HGCALCalibration):
             status = DAU.analyzeSimplePedestal(outdir, module, task_spec, filter_cond)
 
         return status
-        
+
     def addCommandLineOptions(self,parser):
         """add specific command line options for pedestals"""
-        parser.add_argument("--doHexPlots",
-                            action='store_true',
-                            help='save hexplots for the pedestals')
         parser.add_argument("--fromNZSsampling",
                             action='store_true',
                             help='pedestals are to be derived from a sample with NZS sampling')
         parser.add_argument("--scan",
                             action='store_true',
                             help='analyze a scan')
-        
-
-    def buildScanParametersDict(self,file_list,module_list):
-        """for now, returns a list of empty dicts"""
-
-        nfiles = len(file_list)
-        
-        scanparams={}
-        for m in module_list:
-            scanparams[m] = [
-                {} for i in range(nfiles)
-            ]
-        
-        return scanparams
 
     @staticmethod
     def analyze(args):
@@ -111,7 +94,6 @@ class HGCALPedestals(HGCALCalibration):
     def createCorrectionsFile(self, results):
         
         """ final tweaks of the analysis results to export as a json file for CMSSW """
-
         correctors={}
         for r in results:
             typecode = r.pop('Typecode')
