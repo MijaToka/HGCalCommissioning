@@ -5,6 +5,10 @@
 #   https://gitlab.cern.ch/hgcal-dpg/hgcal-sysval-offline/-/merge_requests/13
 #   https://github.com/ywkao/hexagonal_histograms/tree/main/waferMaps
 #   https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/tree/master/DQM/data
+#   https://gitlab.cern.ch/hgcal-dpg/hgcal-sysval-offline/-/tree/master/data/geometry
+# Instructions to run as script and create plotly templates for the wafers:
+#  cd $CMSSW_BASE/src/HGCalCommissioning/LocalCalibration
+#  python3 python/plot/wafer.py
 import os, re
 import json
 try:
@@ -243,6 +247,7 @@ def get_wafer_from_JSON(modtype='ML_L',outdir=datadir,verb=0):
 def get_boundaries_JSON(modtype,verb=0):
   """Create boundaries between eRxs in wafers, loaded from JSON"""
   # https://github.com/ywkao/hexagonal_histograms/blob/main/include/
+  # https://gitlab.cern.ch/hgcal-dpg/hgcal-sysval-offline/-/tree/master/data/geometry
   modtype = modtype[:4].replace('-','_')
   if verb>=1:
     print(f">>> get_boundaries_JSON for modtype={modtype!r}")
@@ -331,6 +336,7 @@ def create_wafer_template(nchans,modtype='ML_F',outdir=datadir,title="",tag="",
         mode='lines',#line_color='black',
         line=dict(color='red',width=1.8),
         opacity=1,
+        hoverinfo='skip', # no info box when hovered over
       ))
   
   # UPDATE LAYOUT
@@ -383,7 +389,7 @@ def create_wafer_template(nchans,modtype='ML_F',outdir=datadir,title="",tag="",
   return go.Figure(fig) # copy
   
 
-if __name__ == '__main__':
+if __name__ == '__main__': # run as script
   
   # CONVERT wafer templates from ROOT -> JSON
   verb = 4
