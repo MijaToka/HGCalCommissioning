@@ -17,7 +17,9 @@
 #include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
 
 #include "HGCalCommissioning/DQM/interface/HGCalSysValDQMCommon.h"
+#include "HGCalCommissioning/DQM/interface/HGCalECONDPacketAnalysis.h"
 #include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalTestSystemMetaData.h"
+#include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
 
 #include <TString.h>
 
@@ -83,6 +85,7 @@ private:
   void findModuleSeeds(uint32_t minProcessed=500);
 
   // ------------ member data ------------
+  const edm::EDGetTokenT<FEDRawDataCollection> fedRawToken_;
   const edm::EDGetTokenT<hgcaldigi::HGCalDigiHost> digisTkn_;
   const edm::EDGetTokenT<hgcaldigi::HGCalECONDPacketInfoHost> econdInfoTkn_;
   const edm::EDGetTokenT<HGCalTestSystemMetaData> metaDataTkn_;
@@ -104,7 +107,8 @@ private:
 
 //
 HGCalSysValDigisClient::HGCalSysValDigisClient(const edm::ParameterSet& iConfig)
-    : digisTkn_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("Digis"))),
+    : fedRawToken_(consumes<FEDRawDataCollection>(iConfig.getParameter<edm::InputTag>("Raw"))),
+      digisTkn_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("Digis"))),
       econdInfoTkn_(consumes<hgcaldigi::HGCalECONDPacketInfoHost>(iConfig.getParameter<edm::InputTag>("ECONDPacketInfo"))), //FlaggedECONDInfo
       metaDataTkn_(consumes<HGCalTestSystemMetaData>(iConfig.getParameter<edm::InputTag>("MetaData"))),
       moduleIdxTkn_(esConsumes<edm::Transition::BeginRun>()),
@@ -121,6 +125,7 @@ HGCalSysValDigisClient::~HGCalSysValDigisClient() { LogDebug("HGCalSysValDigisCl
 //
 void HGCalSysValDigisClient::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
+  desc.add<edm::InputTag>("Raw", edm::InputTag("rawDataCollector"));
   desc.add<edm::InputTag>("Digis", edm::InputTag("hgcalDigis", ""));
   desc.add<edm::InputTag>("ECONDPacketInfo", edm::InputTag("hgcalDigis", "")); //UnpackerFlags
   desc.add<edm::InputTag>("MetaData", edm::InputTag("rawMetaDataCollector", ""));
@@ -301,6 +306,8 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
   const auto& econdInfo = iEvent.getHandle(econdInfoTkn_); // ECON-D packet flags
   if (!econdInfo.isValid()) return;
 
+  const auto& raw_data = iEvent.getHandle(fedRawToken_);
+
   //find bin for each econ and fill its histograms
   // Flags are described in DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoSoA.h
   for(auto it : followedModules_) {
@@ -308,6 +315,15 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     const uint32_t imod = it.second.dqmIndex; // global/dense module index
     const auto econd = econdInfo->const_view()[imod];
 
+    //read rawdata (if available)
+    bool crcvalid(true);
+    if(raw_data.isValid()) {
+      uint32_t fedid = it.first.first;
+      const auto& fed_data = raw_data->FEDData(fedid);
+      const uint64_t* header = reinterpret_cast<const uint64_t*>(fed_data.data());
+      crcvalid = hgcal::econdCRCAnalysis(header, econd.location(), econd.payloadLength());
+    }
+    
     econdPayload_->Fill(imod,econd.payloadLength());
     cbQualityH_->Fill(imod,econd.cbFlag());
     
@@ -323,6 +339,7 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     if (econd.exception()==3) econdQualityH_->Fill(imod, 11); // wrongHeaderMarker
     if (econd.exception()==4) econdQualityH_->Fill(imod, 12); // payloadOverflows
     if (econd.exception()==5) econdQualityH_->Fill(imod, 13); // payloadMismatches
+    if (!crcvalid) econdQualityH_->Fill(imod, 14); // CRCMismatches
     if (econd.exception()==5 ||
 	htflags>0 ||
 	eboflags>0 ||
@@ -358,7 +375,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
   const auto& moduleInfo = iSetup.getData(moduleInfoTkn_);
 
   //loop over available modules in the system and select the ones to be tracked
-  for(auto it : moduleIndexer.typecodeMap_) {
+  for(const auto it : moduleIndexer.getTypecodeMap()) {
     uint32_t fedid = it.second.first;
     if(fedList_.size()>0 && std::find(fedList_.begin(), fedList_.end(), fedid) == fedList_.end()) continue;
 
@@ -368,7 +385,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     uint32_t denseModIdx = moduleIndexer.getIndexForModule(fedid, imod); // global/dense module index
     const auto modInfo = moduleInfo.view()[denseModIdx];
 
-    MonitoredElement_t ele;
+    MonitoredElement_t ele;    
     ele.dqmIndex = denseModIdx;
     ele.typecode = typecode;
     ele.nErx = moduleIndexer.getMaxERxSize(fedid, imod); 
@@ -404,7 +421,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     "H/T good",    "H/T fail",    "H/T amb",
     "E/B/O good",  "E/B/O fail",  "E/B/O amb",
     "Unmatched (M)",   "Trunc (T)", "Unexpected (E)", "Sub-packet error (S)",
-    "Marker", "Payload (OF)", "Payload (mismatch)"};
+    "Marker", "Payload (OF)", "Payload (mismatch)","CRC (mismatch)"};
   size_t necondflags = econdflags.size();
   econdQualityH_ = ibook.book2D("econdQualityH", ";ECON-D;Header quality;", nmods, 0, nmods, necondflags, 0, necondflags);
   for(size_t i=0; i<necondflags; i++) econdQualityH_->setBinLabel(i+1, econdflags[i].c_str(), 2);

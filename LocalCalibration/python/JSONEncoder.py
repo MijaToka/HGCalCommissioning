@@ -47,34 +47,6 @@ class CompactJSONEncoder(json.JSONEncoder):
   def iterencode(self, o, **kwargs):
     """Required to also work with `json.dump`."""
     return self.encode(o)
-  
-
-def getCalibTemplate(nch) :
-
-    z=np.zeros(nch).tolist()
-    o=np.ones(nch).tolist()
-    
-    calib_templ_dict = {
-        'Channel': [i for i in range(nch)],
-        'ADC_ped': [z,z,z],
-        'Noise': [z,z,z],
-        'CM_ped': [z,z,z],
-        'CM_slope': [z,z,z],
-        'BXm1_slope': [z,z,z],
-        'BXm1_ped': [z,z,z],
-        'ADCtofC': [o,o,o],
-        'TOTtofC': o,
-        'TOT_ped': z,
-        'TOT_lin': z,
-        'TOT_P0': z,
-        'TOT_P1': z,
-        'TOT_P2': z,
-        'TOAtops': o,
-        'MIPS_scale': o,
-        'Valid': o
-    }
-
-    return calib_templ_dict
 
 def saveAsJson(url : str, results : dict, compress=False):
     """takes care of saving to a json file"""

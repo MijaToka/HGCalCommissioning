@@ -1,97 +1,66 @@
 import FWCore.ParameterSet.Config as cms
 import re
 
-_sysvalconfig = {
-    'B27': {
-        '1': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_B27v1.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_B27v1.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_B27v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_B27v1.json',
-            'trig_scintillator_block':5,
-            'trig_num_blocks':7
-        },
-    },
-    'TB2024': {
-        '1': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v1.json',
-            'trig_scintillator_block':5,
-            'trig_num_blocks':7
-        },
-        '2': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v1.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v1.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v1.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v2.json',
-            'trig_scintillator_block':5,
-            'trig_num_blocks':7
-        },
-        '3': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v2.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v3.json',
-            'trig_scintillator_block':5,
-            'trig_num_blocks':7
-        },
-        '4': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v2.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v4.json',
-            'trig_scintillator_block':9,
-            'trig_num_blocks':11
-        },
-        '5': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v3.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v2.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v2.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v5.json',
-            'trig_scintillator_block':9,
-            'trig_num_blocks':11
-        },
-        '6': {
-            'fedId':[0],
-            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_TB2024v4.txt',
-            'fedconfig':'HGCalCommissioning/LocalCalibration/data/config_feds_TB2024v3.json',
-            'modconfig':'HGCalCommissioning/LocalCalibration/data/config_econds_TB2024v3.json',
-            'modcalib':'HGCalCommissioning/LocalCalibration/data/level0_calib_params_TB2024v6.json',
-            'trig_scintillator_block':9,
-            'trig_num_blocks':11
-        },        
-    },
-}
+from HGCalCommissioning.Configuration.ErasSepTB2024_cff import Eras_SepTB2024, Calibs_SepTB2024, CustomCalibs_SepTB2024
+
+_SysValEras = {}
+_SysValEras.update(Eras_SepTB2024)
+
+_SysValCalibs = {}
+_SysValCalibs.update(Calibs_SepTB2024)
 
 
-def getEraConfiguration(era : str) -> dict :
-    """gets the appropriate configuration to use from the eras dict"""
+def findAppropriateCalib(run : int, calib_dict : dict) -> dict:
+    """checks which is the closest preceding relay / run for which a calibration is available, if none return the default one"""
+
+    #sort by increasing run number: stop first negative difference (=>run < ref_run)
+    available_refs = sorted([r for r in calib_dict.keys() if type(r)==int], reverse=False)
+    refrun = available_refs[0]
+    for i in range(1,len(available_refs)):
+        delta = run - available_refs[i]
+        if delta<0 : break
+        refrun = available_refs[i]
+
+    #print(f'Will use as reference run{run}')
+          
+    #return calib from reference run
+    return refrun, calib_dict[refrun]
+
+
+def getEraConfiguration(era : str, run : int) -> dict :
+    """gets the appropriate configuration to use from the eras dict
+    run is used to fine tune the calibration and configurations used
+    """
     
     groups=re.findall('(.*)/v(\\d+)',era)
     if len(groups)!=1 or len(groups[0])!=2 :
         raise ValueError(f'Could not decode era {era}')
 
     setup,version = groups[0]
-    if not setup in _sysvalconfig:
+    if not setup in _SysValEras:
         raise ValueError(f'Setup {setup} is not found in configuration')
-    if not version in _sysvalconfig[setup]:
+    if not version in _SysValEras[setup]:
         raise ValueError(f'Version {version} of setup {setup} is not found in configuration')
+    if not setup in _SysValCalibs:
+        raise ValueError(f'Setup {setup} is not found in calibrations')
+
+    refrun, calib = globals()[f'CustomCalibs_{setup}'](run)
+    if refrun is None:
+        print('No pre-defined reference run: falling back on timestamp based references') 
+        refrun, calib = findAppropriateCalib(run=run, calib_dict=_SysValCalibs[setup])
+    print(f'Reference run is {refrun}')
     
-    return _sysvalconfig[setup][version]
+    cfg = _SysValEras[setup][version].copy()
+    cfg.update(calib)
+    cfg['ReferenceRun'] = refrun
+    
+    return cfg
 
 
-def initSysValCMSProcess(procname : str, era : str, maxEvents : int = -1) -> (cms.Process, dict):
+def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1) -> (cms.Process, dict):
     """common declarations for sysval tests: geometry is dummy, it's just the latest"""
 
-    eraConfig = getEraConfiguration(era=era)
+    eraConfig = getEraConfiguration(era=era, run=run)
 
     #INIT PROCESS
     from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2
@@ -139,9 +108,16 @@ def initSysValCMSProcess(procname : str, era : str, maxEvents : int = -1) -> (cm
         gain=cms.int32(1), # to switch between 80, 160, 320 fC calibration : Discuss with Izaak this line
         indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
     )
+    #sas file in path is used check if file is in eos and transform it with a relative path to CMSSW_BASE
+    modcalib=eraConfig['modcalib']
+    if modcalib.find('/eos/cms')==0:
+        import os
+        tkns = f'{os.environ["CMSSW_BASE"]}/src'.split('/')
+        relpath = '/'.join( ['..']*len(tkns) )
+        modcalib=relpath+modcalib
     process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
         'hgcalrechit::HGCalCalibrationESProducer@alpaka',
-        filename=cms.string(eraConfig['modcalib']),
+        filename=cms.FileInPath(modcalib),
         indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
         configSource=cms.ESInputTag('hgcalConfigESProducer', '')
     )
@@ -153,3 +129,25 @@ def initSysValCMSProcess(procname : str, era : str, maxEvents : int = -1) -> (cm
 
 
     return (process, eraConfig)
+
+
+if __name__ == '__main__':
+
+    #SepTB2024 hardware-driven eras
+    hweras = [1726178015, 1726313281, 1727030266]
+
+    #SepTB2024 selected relays
+    relays = [1726225188, 1726304466, 1726346360, 1726428151, 1726512750, 1726589326, 1726763542, 1726909688, 1726920438, 1726941148, 1727033054, 1727101030, 1727116899, 1727124229, 1727132348, 1727169610, 1727170256, 1727173910, 1727180386, 1727185107, 1727203674, 1727206089, 1727207396, 1727208074, 1727208484, 1727208963, 1727209457, 1727209838, 1727210224, 1727210663, 1727211076, 1727217678]
+
+    relay_table=[]
+    for r in relays:
+
+        ref_idx = -1
+        for idx, rr in enumerate(hweras[::-1]) :
+            if r-rr<0 : continue
+            ref_idx = len(hweras)-1-idx
+            break
+        era = f'SepTB2024/v{ref_idx+1}' if ref_idx>=0 else 'Default'
+        era_config = getEraConfiguration(era,r)
+        relay_table.append( f'| {r:5d} | {era} | {era_config["ReferenceRun"]} |')
+    print('\n'.join(relay_table))

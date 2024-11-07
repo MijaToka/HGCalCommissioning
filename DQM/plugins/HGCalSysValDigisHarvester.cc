@@ -122,7 +122,7 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
   std::vector<char> irotstates(typecodes.size(),0);
   auto const& moduleIndexer = iSetup.getData(moduleIdxTkn_);
   auto const& moduleInfo = iSetup.getData(moduleInfoTkn_);
-  for(auto it : moduleIndexer.typecodeMap_) {
+  for(auto it : moduleIndexer.getTypecodeMap()) {
 
     //dqmIndex as pre-determined in the DigisClient
     uint32_t fedid = it.second.first;

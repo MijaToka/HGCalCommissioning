@@ -5,13 +5,12 @@ import numpy as np
 
 from PrepareLevel0CalibParams import buildLevel0CalibParams
 
-def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 : float, cmtype : str, gain_index : int = 1, onlyPedestals : bool = False, P_CM_correction : bool = False, P_CM_BXm1_correction : bool = False , factor : int = 1) -> dict:
+def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 : float, cmtype : str, onlyPedestals : bool = False, P_CM_correction : bool = False, P_CM_BXm1_correction : bool = False , factor : int = 1) -> dict:
     """                                                                                                                                                                                                                                                                                                                                                                                
     Convert ECON-D Offline parameters to slow-control parameters used in SWAMP  
     * path_to_config : the location of the pedestals json file
     * mip_sf : a scaling factor in units of MIP to define the threshold
-    * cmtype : 2, 4, all - the common mode type to use
-    * gain : the gain to choose from the values which will be configured in the ROC  
+    * cmtype : 2, 4, all - the common mode type to use    
     The following ZS algorithms need to be programmed
 
     * Zero-supression: `A0_i + CE > (lamb x A_CM)>>5 + ((kappa_corr x Am1_i)>>5) + C_i`
@@ -35,34 +34,34 @@ def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 
     config_regmap = {}
     #read the pedestals json and iterate over modules
     input_json = json.loads('{"ped":"'+path_to_config+'"}')
-    config = buildLevel0CalibParams(input_json, gain_index, cmtype)
+    config = buildLevel0CalibParams(input_json, cmtype)
 
     for typecode_key, c_dict in config.items():
         # read offline calibration constants
-        P_i = np.array(c_dict["ADC_ped"][gain_index])
-        P_cm = np.array(c_dict[f"CM_ped"][gain_index])
+        P_i = np.array(c_dict["ADC_ped"])
+        P_cm = np.array(c_dict[f"CM_ped"])
 
         #if only pedestals+noise
         if onlyPedestals:
-           beta_corr = np.zeros(len(c_dict[f"CM_slope"][gain_index])) #beta = 0
-           kappa_corr = np.zeros(len(c_dict["BXm1_slope"][gain_index])) #kappa = 0
-           noise = np.array(c_dict["Noise"][gain_index])
+           beta_corr = np.zeros(len(c_dict[f"CM_slope"])) #beta = 0
+           kappa_corr = np.zeros(len(c_dict["BXm1_slope"])) #kappa = 0
+           noise = np.array(c_dict["Noise"])
 
            T = factor * noise
         elif P_CM_correction:
-           beta_corr = np.array(c_dict[f"CM_slope"][gain_index]) 
-           kappa_corr = np.zeros(len(c_dict["BXm1_slope"][gain_index])) #kappa = 0
-           noise = np.array(c_dict["Noise"][gain_index])
+           beta_corr = np.array(c_dict[f"CM_slope"]) 
+           kappa_corr = np.zeros(len(c_dict["BXm1_slope"])) #kappa = 0
+           noise = np.array(c_dict["Noise"])
 
            T = np.array(c_dict["MIPS_scale"]) * mip_sf + factor * noise
         elif P_CM_BXm1_correction:
-           beta_corr = np.ones(len(c_dict[f"CM_slope"][gain_index])) #beta = 1
-           kappa_corr = factor * np.ones(len(c_dict["BXm1_slope"][gain_index])) #kappa = scan
-           noise = np.array(c_dict["Noise"][gain_index])
+           beta_corr = np.ones(len(c_dict[f"CM_slope"])) #beta = 1
+           kappa_corr = factor * np.ones(len(c_dict["BXm1_slope"])) #kappa = scan
+           noise = np.array(c_dict["Noise"])
            T = np.ones(len(np.array(c_dict["MIPS_scale"])))
         else:
-           kappa_corr = np.array(c_dict["BXm1_slope"][gain_index])
-           beta_corr = np.array(c_dict[f"CM_slope"][gain_index])
+           kappa_corr = np.array(c_dict["BXm1_slope"])
+           beta_corr = np.array(c_dict[f"CM_slope"])
            T = np.array(c_dict["MIPS_scale"]) * mip_sf
 
         #convert to ECOND ZS parameters
@@ -164,9 +163,6 @@ def main():
     parser.add_argument("--mipSFm1",
                         help='mip scaling factor to determine ZS threshold for BX-1 %(default)s',
                         default=0.0, type=float)
-    parser.add_argument("--gain",
-                        help='ROC gain which will be used %(default)s',
-                        default=1, type=int)
     parser.add_argument("--CE",
                         help='global offset %(default)s',
                         default=0, type=float)
@@ -195,8 +191,7 @@ def main():
                                 CE = args.CE,
                                 mip_sf=args.mipSF,
                                 mip_sf_m1=args.mipSFm1,
-                                cmtype=args.cmType,
-                                gain_index=args.gain,
+                                cmtype=args.cmType,                                
                                 onlyPedestals = args.onlyPedestals,
                                 P_CM_BXm1_correction = args.P_CM_BXm1_correction,
                                 P_CM_correction = args.P_CM_correction,

@@ -28,6 +28,8 @@ class HGCALCalPulse(HGCALCalibration):
                             help="skip fits and use results already stored in the feather files")
         parser.add_argument("--addControlPlots", action='store_true',
                             help="add control plots for scan")
+        parser.add_argument("--minq_totfit", default=250., type=float,
+                            help="minimum charge for TOT fit")
         
     @staticmethod
     def histofiller(args):
@@ -51,7 +53,7 @@ class HGCALCalPulse(HGCALCalibration):
         fit_out = os.path.dirname(routput) + f'/{typecode}_fits'
         if not cmdargs.skipFits:
           df = pd.read_feather(routput.replace('.root','.feather'))
-          cpm = CalPulseModel(df,fit_out=fit_out)
+          cpm = CalPulseModel(df,fit_out=fit_out,minq_totfit=cmdargs.minq_totfit)
           fit_results=cpm.fit_results
         else:
           fit_results = pd.read_feather(fit_out+'.feather')

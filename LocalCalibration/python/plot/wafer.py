@@ -17,7 +17,8 @@ try:
   import plotly.io as pio
 except ModuleNotFoundError as error:
   error.msg += "! Please install with 'python3 -m pip install --user plotly'"
-  raise error
+  #raise error #do not raise ... jobs ran within CMSSW do not need this
+
 rgb_exp = re.compile(r"\d+")
 #datadir = "../DQM/data" #"$CMSSW_BASE/src/HGCalCommissioning/DQM/data"
 datadir = os.path.relpath(os.path.join(os.environ.get("CMSSW_BASE"),"src/HGCalCommissioning/DQM/data"),os.getcwd())
@@ -120,6 +121,7 @@ def fill_wafer_hist(ch_values,moduletype='ML_L'):
       hex_plot.AddBin(obj)
       eRx = int(iobj/39)
       idx = iobj - eRx*2 #take out 2 CM per eRx to get the proper idx
+      print(ch_values,moduletype)
       if idx < len(ch_values):
         hex_plot.SetBinContent(idx+1,ch_values[idx])
       else:

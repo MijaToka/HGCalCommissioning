@@ -23,20 +23,20 @@ class HGCALPedestals(HGCALCalibration):
 
         outdir, module, task_spec, cmdargs = args
 
-        status = False
+        rfile = None
         if cmdargs.fromNZSsampling or cmdargs.scan:
-            filter_conds = {'rnd':'HGCMetaData_trigType==4'}
+            filter_conds = {'rnd':cmdargs.pedTrigger}
             if cmdargs.fromNZSsampling:
                 filter_conds = {
                     'zs':'HGCMetaData_trigType==4',
                     'nzs':'HGCMetaData_trigType==16'
                 }
-            status = DAU.scanHistoFiller(outdir, module, task_spec, filter_conds)
+            rfile = DAU.scanHistoFiller(outdir, module, task_spec, filter_conds)
         else:
-            filter_cond = 'HGCMetaData_trigType==4' #request randoms only
-            status = DAU.analyzeSimplePedestal(outdir, module, task_spec, filter_cond)
+            filter_cond = cmdargs.pedTrigger
+            rfile = DAU.analyzeSimplePedestal(outdir, module, task_spec, filter_cond)
 
-        return status
+        return (module,rfile)
 
     def addCommandLineOptions(self,parser):
         """add specific command line options for pedestals"""
@@ -46,10 +46,16 @@ class HGCALPedestals(HGCALCalibration):
         parser.add_argument("--scan",
                             action='store_true',
                             help='analyze a scan')
+        parser.add_argument("--pedTrigger",
+                            default='HGCMetaData_trigType==4',
+                            help='trigger type to use')
 
     @staticmethod
     def analyze(args):
+      
         typecode, url, cmdargs = args
+        if '_closure' in typecode : return {}
+        
         if cmdargs.fromNZSsampling:
             pedestals_dict = HGCALPedestals.analyzeNZSsamplingResults(args)
         else:
@@ -76,16 +82,21 @@ class HGCALPedestals(HGCALCalibration):
             x_rms = np.array(results['Y_rms'])
             adc_rms = np.array(results['Z_rms'])
             rho = np.array(results['YZ_rho'])
-            noslope = np.zeros_like(rho)
-
             pedestals_dict[x+'_ped'] = results['Y_mean']
             pedestals_dict[x+'_rms'] = x_rms.tolist()
-            pedestals_dict[f'{x}_slope'] = np.where(x_rms>1e-3, rho*adc_rms/x_rms, noslope).tolist()
-            
+            isvalid = np.isfinite(rho) & np.isfinite(adc_rms) & np.isfinite(x_rms) & (x_rms>1e-3)
+            try:
+              pedestals_dict[f'{x}_slope'] = np.zeros_like(rho)
+              np.divide(rho*adc_rms, x_rms, out=pedestals_dict[f'{x}_slope'], where=isvalid)
+              pedestals_dict[f'{x}_slope'] = pedestals_dict[f'{x}_slope'].tolist()
+            except Exception as e:              
+              print(f'At {x} for {typecode} : {e}')
+              pass
+
             if 'ADC_ped' in pedestals_dict: continue
-            pedestals_dict['ADC_ped']=results['Z_mean']
-            pedestals_dict['ADC_rms']=adc_rms.tolist()
-            pedestals_dict['Valid'] = (adc_rms>1e-3).astype(int).tolist()
+            pedestals_dict['ADC_ped'] = results['Z_mean']
+            pedestals_dict['ADC_rms'] = adc_rms.tolist()
+            pedestals_dict['Valid'] = isvalid.astype(int).tolist()
             pedestals_dict['Channel'] = [i for i in range(adc_rms.shape[0])]
 
         return pedestals_dict
@@ -96,6 +107,7 @@ class HGCALPedestals(HGCALCalibration):
         """ final tweaks of the analysis results to export as a json file for CMSSW """
         correctors={}
         for r in results:
+            if not 'Typecode' in r : continue
             typecode = r.pop('Typecode')
             correctors[typecode]=r
         jsonurl = f'{self.cmdargs.output}/pedestals.json'

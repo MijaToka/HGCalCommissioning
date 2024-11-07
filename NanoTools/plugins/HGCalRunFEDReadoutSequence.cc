@@ -85,7 +85,7 @@ public:
     typedef std::pair<std::string, std::vector<uint32_t> > TypeCode2Idx_t;
     std::vector<TypeCode2Idx_t> typeCodeTreeIndices;
     uint32_t idx(0);
-    for(auto it : moduleIndex.typecodeMap_) {
+    for(auto it : moduleIndex.getTypecodeMap() ) {
 
       std::string typecode = it.first;
       std::replace( typecode.begin(), typecode.end(), '-', '_');
