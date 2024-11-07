@@ -36,7 +36,7 @@ print(f'\t yamls dict:')
 rich.print(yamls)
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, eraConfig = initSysValCMSProcess( procname='RAW2DIGI', era=era, maxEvents=options.maxEvents)
+process, eraConfig = initSysValCMSProcess( procname='RAW2DIGI', era=era, run=run, maxEvents=options.maxEvents)
 
 print(f'Era = {era} has the following config')
 print(eraConfig)

@@ -1,8 +1,0 @@
-{
-    "0": {
-        "mismatchPassthroughMode": 0,
-        "cbHeaderMarker": "0x7f",
-        "slinkHeaderMarker": "0x55",
-        "econds": ["ML-F3PT-TX-0003", "ML-F3PC-MX-0003" ]
-    }
-}

@@ -126,7 +126,7 @@ rvec_f commonMode(const rvec_i &cm, int mode=2) {
   std::vector<float> chcm(cm.size(),0.);
   for(size_t i=0; i<cm.size(); i++){    
     int iErx( int(i/37) );
-    chcm[i] = cmavg[iErx] / navg[iErx];
+    chcm[i] =  navg[iErx]>0 ? cmavg[iErx] / navg[iErx] : 0.;
   }
 
   return rvec_f(chcm.begin(), chcm.end());

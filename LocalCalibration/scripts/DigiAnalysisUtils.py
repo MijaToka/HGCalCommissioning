@@ -6,17 +6,21 @@ import gzip
 import re
 import pandas as pd
 
-def defineDigiDataFrameFromSpecs(specs, attachProgressBar=True):
-    """defines the dataframe to be used for the analysis of DIGIs in NANOAOD"""
-
+def defineDigiDataFrameFromSpecs(specs, attachProgressBar=True, ix_filter_cond='ix>=0'):
+    """defines the dataframe to be used for the analysis of DIGIs in NANOAOD
+    specs is a json file used to instatiate the RDataFrame. if the name is of the form json:ix
+    it is split and the ix passed is used to split the full instantiation
+    """
+    
     #start RDataFrame from specifications
     ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
     rdf = ROOT.RDF.Experimental.FromSpec(specs)
     if attachProgressBar:
         ROOT.RDF.Experimental.AddProgressBar(rdf)
-    
+        
     # filter out data for the fed/readout sequence corresponding to a single module
     rdf = rdf.DefinePerSample('ix', 'rdfsampleinfo_.GetI("index")') \
+             .Filter(ix_filter_cond) \
              .DefinePerSample('target_module_fed', 'rdfsampleinfo_.GetI("fed")') \
              .DefinePerSample('target_module_seq', 'rdfsampleinfo_.GetI("seq")') \
              .Define('good_digiadc',  'HGCDigi_flags!=0xFFFF && HGCDigi_tctp<3') \
@@ -59,15 +63,13 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     """
 
     ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
-    rdf=defineDigiDataFrameFromSpecs(task_spec)
-    if len(filter_cond)>0:
-        rdf = rdf.Filter(filter_cond)
 
     #read #pts and #eErx from first task
     with open(task_spec) as json_data:
         samples = json.load(json_data)['samples']
     nerx = samples['data1']['metadata']['nerx']
     nch = nerx*37
+    npts = max(d['metadata']['index'] for s, d in samples.items()) #len(samples)
 
     #run a mini scan to determine appropriate bounds
     minirdf = defineDigiDataFrameFromSpecs(task_spec)
@@ -78,6 +80,7 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     obslist = ['adc', 'cm2', 'cm4', 'cmall', 'toa', 'tot']
     obsbounds  = [minirdf.Min(x) for x in obslist]
     obsbounds += [minirdf.Max(x) for x in obslist]
+    obsbounds += [minirdf.Mean(x) for x in obslist]
     ROOT.RDF.RunGraphs(obsbounds)
     bindefs={}
     for i,obs in enumerate(obslist):
@@ -90,6 +93,15 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
             nobs = int(maxobs - minobs)
             if nobs<1 or nobs>4095 :
                 raise ValueError
+
+            #if there is a large spread in ADC-like channels it's suspicious
+            #to avoid booking a large histogram prefer to focus on a window around the mean
+            if not obs in ['toa','tot'] and nobs>512:
+                avgobs = int(obsbounds[i+2*len(obslist)].GetValue())
+                minobs = max(avgobs-256-0.5,-0.5)
+                maxobs = min(avgobs+256+0.5,1024.5)
+                nobs = int(maxobs - minobs)
+                print('[Warning] Limited binning for {obs} due to large number of bins')            
         except:
             continue
         bindefs[obs]=(nobs,minobs,maxobs)
@@ -103,11 +115,14 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     scanInfoHist.GetYaxis().SetBinLabel(2,'LS')
     for ls,lsinfo in samples.items():
         idx = lsinfo["metadata"]["index"]
-        run, ls = re.findall('.*/NANO_(\d+)_(\d+).root',lsinfo['files'][0])[0]
+        run, postfix = re.findall('.*/NANO_(\d+)_(.*).root',lsinfo['files'][0])[0]        
         scanInfoHist.SetBinContent(idx,1,int(run))
-        scanInfoHist.SetBinContent(idx,2,int(ls))
+        scanInfoHist.SetBinContent(idx,2,int(postfix) if postfix.isdigit() else idx+1)
         
-    #declare histograms
+    #declare histograms with full statistics
+    rdf=defineDigiDataFrameFromSpecs(task_spec)
+    if len(filter_cond)>0:
+        rdf = rdf.Filter(filter_cond)
     graphlist=[]
     chbinning=(nch,-0.5,nch-0.5)    
     if 'adc' in bindefs:
@@ -134,8 +149,9 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     #run and save
     ROOT.RDF.RunGraphs(graphlist)
     histolist = [obj.GetValue() for obj in graphlist]
-    fillHistogramsAndSave(histolist = histolist, rfile = f'{outdir}/{module}.root')    
-    return True
+    rfile =  f'{outdir}/{module}.root'
+    fillHistogramsAndSave(histolist = histolist, rfile = rfile)    
+    return rfile
 
     
 def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
@@ -143,6 +159,10 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     A base method to fill histograms in a scan (each sub-task in task_spec) is treated as a scan point
     filter_conds is a dict used to define different sub-samples for which the histos will be filled
     """
+
+    ix_filt=-1
+    if ':' in task_spec:
+        task_spec,ix_filt = task_spec.split(':')
     
     # read #pts and #eErx from first task
     scantype = 'test'
@@ -151,8 +171,7 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     npts = max(d['metadata']['index'] for s, d in samples.items()) #len(samples)
     nerx = samples['data1']['metadata']['nerx']
     nch = nerx*37
-    if 'CalPulseVal' in samples['data1']['metadata']: # automatically recognize scan type
-        scantype = 'CalPulse'
+    scantype = samples['data1']['metadata']['type'] # automatically recognize scan type
     if verb>=2:
         print(f"scanHistoFiller: scantype={scantype}, npts={npts}, nerx={nerx}, nch={nch}")
     
@@ -169,27 +188,33 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
             run, ls = run_rexp.findall(sample['files'][0])[0]
             scanInfoHist.SetBinContent(idx,1,int(run))
             scanInfoHist.SetBinContent(idx,2,int(ls))
-    elif scantype=='CalPulse': # scan over charge injection points ('CalPulseVal')
-        infobins = (3,0,3)
+    elif scantype=='HGCALCalPulse': # scan over charge injection points ('CalPulseVal')
+        infobins = (5,0,5)
         scanInfoHist = ROOT.TH2F('scaninfo', "Scan info;Scan point;Parameters", *ptbins, *infobins)
         scanInfoHist.GetYaxis().SetBinLabel(1,'Run')
         scanInfoHist.GetYaxis().SetBinLabel(2,'LS')
-        scanInfoHist.GetYaxis().SetBinLabel(3,'CalPulse')
+        scanInfoHist.GetYaxis().SetBinLabel(3,'dac')
+        scanInfoHist.GetYaxis().SetBinLabel(4,'gain')
+        scanInfoHist.GetYaxis().SetBinLabel(5,'n') #if run in different jobs this will be used to count how many sub-jobs are contributing 
         for key, sample in samples.items(): # loop over scan points
             idx  = sample['metadata']['index']
-            injq = sample['metadata']['CalPulseVal'] # injected charge
+            injq = sample['metadata']['dac'] # injected charge
+            gain = sample['metadata']['gain'] # gain
             run, ls = run_rexp.findall(sample['files'][0])[0]
             if verb>=2:
                 print(f"scanHistoFiller: mod={module} idx={idx}, run={run}, ls={ls}, injq={injq}, files={sample['files']}")
             scanInfoHist.SetBinContent(idx,1,int(run))
             scanInfoHist.SetBinContent(idx,2,int(ls))
             scanInfoHist.SetBinContent(idx,3,int(injq))
+            scanInfoHist.SetBinContent(idx,4,int(gain))
+            scanInfoHist.SetBinContent(idx,5,1)
     else:
         raise IOError(f"Did not recognize scantype={scantype}...")
     
     # prepare RDF
     ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
-    rdf = defineDigiDataFrameFromSpecs(task_spec)
+    ix_filter_cond='ix>=0' if ix_filt==-1 else f'ix=={ix_filt}'
+    rdf = defineDigiDataFrameFromSpecs(specs=task_spec, attachProgressBar=True, ix_filter_cond=ix_filter_cond)
     
     # declare histograms (per sample filtered)
     chbins = (nch,-0.5,nch-0.5)    
@@ -213,10 +238,10 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     # run and save
     ROOT.RDF.RunGraphs(graphlist)
     histolist = [obj.GetValue() for obj in graphlist] + [scanInfoHist]
-    rfile = f"{outdir}/{module}.root"
-    fillHistogramsAndSave(histolist=histolist, rfile=rfile)
-    return True
-    
+    postfix='' if ix_filt==-1 else f'_ix{ix_filt}'
+    rfile = f'{outdir}/{module}{postfix}.root'
+    fillHistogramsAndSave(histolist = histolist, rfile = rfile)    
+    return rfile
 
 def fillHistogramsAndSave(histolist : list, rfile : str):
     """saves list of histograms in ROOT file"""
@@ -376,12 +401,16 @@ def profile3DScanHisto(infname, hnames, storehists=True, adc_cut=180, verb=0):
     scan_summary = []
     for ix in range(1,nx+1): # loop over scan points
 
-      run = int(hinfo.GetBinContent(ix,1)) # run number
-      ls = int(hinfo.GetBinContent(ix,2)) # lumi section
-      scanval = hinfo.GetBinContent(ix,3) # injected charge
-      if verb>=2:
-        print(f"profile3DScanHisto: Filling tree for scanpoint iscan={ix}, run={run}, scanval={scanval}")
+      nentries = int(hinfo.GetBinContent(ix,5)) # gain
+      run = int(hinfo.GetBinContent(ix,1)/nentries) # run number
+      ls = int(hinfo.GetBinContent(ix,2)/nentries) # lumi section
+      gain = int(hinfo.GetBinContent(ix,4)/nentries) # gain
+      dac = int(hinfo.GetBinContent(ix,3)/nentries) # injected charge
+      lsb_dict = {0:0.122, 1:1.953, 2:2.075}
+      inj_q = lsb_dict[gain]*dac
 
+      #if verb>=2:
+      print(f"profile3DScanHisto: Filling tree for scanpoint {nentries} iscan={ix}, run={run}, gain={gain} dac={dac}")
 
       for iy in iy_scan: # loop over injected channels
         
@@ -393,11 +422,7 @@ def profile3DScanHisto(infname, hnames, storehists=True, adc_cut=180, verb=0):
         for hname, hist3D in hists3D.items():
 
           isadc = (hname[:3]=='adc')
-          dac = hinfo.GetBinContent(ix,3)
-          gain = 0 #FIXME : this should be filled in the histo as well
-          lsb_dict = {0:0.122, 1:1.953, 2:2.075}
-          inj_q = lsb_dict[gain]*dac  
-          
+                
           #create projection
           ztit = hist3D.GetZaxis().GetTitle()
           nz, zmin, zmax = hist3D.GetNbinsZ(), hist3D.GetZaxis().GetXmin(), hist3D.GetZaxis().GetXmax()
@@ -432,7 +457,7 @@ def profile3DScanHisto(infname, hnames, storehists=True, adc_cut=180, verb=0):
             hdir.cd()
             zhist.SetDirectory(hdir)
             zhist.Write(zname)
-            fillgraph(hname,ichan,q_inj,avgcounts,rmscounts)
+            fillgraph(hname,ichan,inj_q,avgcounts,rmscounts)
           else: # clean memory to avoid�segfault from bad alloc ?
             #zhist.Delete()
             ROOT.gDirectory.Delete(zhist.GetName())

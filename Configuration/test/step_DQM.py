@@ -11,7 +11,7 @@ options.parseArguments()
 print(f'Starting DQM of Run={options.run} with era={options.era}')
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, _ = initSysValCMSProcess(procname='DQM',era=options.era, maxEvents=options.maxEvents)
+process, _ = initSysValCMSProcess(procname='DQM',era=options.era, run=options.run, maxEvents=options.maxEvents)
 
 # SOURCE
 process.source = cms.Source("PoolSource",

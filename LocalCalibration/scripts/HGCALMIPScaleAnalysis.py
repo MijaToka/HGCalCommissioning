@@ -97,9 +97,9 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         parser.add_argument("--rebinForFit",
                             default='-1', type=int,
                             help='Rebin for fit=%(default)s')
-        parser.add_argument("--doHexPlots",
+        '''parser.add_argument("--doHexPlots",
                             action='store_true',
-                            help='save hexplots for the pedestals')
+                            help='save hexplots for the pedestals')'''
 
     @staticmethod
     def analyze(args):
@@ -239,9 +239,11 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         #init the workspace for the fit
         nz,zmin,zmax=h.GetNbinsZ(),h.GetZaxis().GetXmin(),h.GetZaxis().GetXmax()
         w = ROOT.defineMIPFitWorkspace(zmin,zmax);
-        x = w.var('x')        
+        x = w.var('x')
+        x.setRange("noise_range", -5, 5)
         x.setBins(nz)
         if rebinFact>1: x.setBins(int(nz/rebinFact))
+        noise_model = w.pdf('noise_pdf')
         model = w.pdf('model')
 
         #loop over each channel and run the fit
@@ -255,6 +257,13 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
                 hpz=hpz.Rebin(rebinFact)
 
             #run fit
+            noise_fit_result = ROOT.runMIPFit(hpz, noise_model, x, "noise_range")
+            loc=noise_fit_result.parVals[0]
+            sigma= noise_fit_result.parVals[1]
+
+            w.var('loc').setVal(loc)
+            w.var('sigma').setVal(sigma)
+
             fr = ROOT.runMIPFit(hpz, model, x)
 
             #append results of the fit

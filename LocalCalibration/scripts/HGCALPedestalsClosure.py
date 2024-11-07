@@ -34,8 +34,8 @@ class HGCALPedestalsClosure(HGCALCalibration):
                 .Define('dsen',          f'sumOverRoc(ch,en,2)') \
                 .Define('asen',          f'sumOverRoc(ch,en,3)') \
                 .Define('modulecm',      'HGCDigi_cm[maskhit]') \
-                .Define('cm2',           'commonMode(modulecm,2)') \
-                .Filter('HGCMetaData_trigType==4')
+                .Define('cm2',           'commonMode(modulecm,2)')
+        #.Filter('HGCMetaData_trigType==4')
 
         return rdf
     
@@ -44,7 +44,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
     def histoFillerForClosure(args):
         """defines the filling of the histograms for closure tests of the pedestal"""
         
-        outdir, module, task_spec = args
+        outdir, module, task_spec, cmdargs = args
         
         #read #rocs and #eErx from first task
         with open(task_spec) as json_data:
@@ -59,6 +59,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
         obslist = ['en', 'cm2', 'dsen', 'asen']
         obsbounds  = [minirdf.Min(x) for x in obslist]
         obsbounds += [minirdf.Max(x) for x in obslist]
+        obsbounds += [minirdf.Mean(x) for x in obslist]
         ROOT.RDF.RunGraphs(obsbounds)
         bindefs={
             'ch' : (nch,-0.5,nch-0.5),
@@ -68,12 +69,24 @@ class HGCALPedestalsClosure(HGCALCalibration):
         for i,obs in enumerate(obslist):
             minobs = int(obsbounds[i].GetValue()) - 0.5
             maxobs = int(obsbounds[i+len(obslist)].GetValue()) + 0.5
-            nobs = int(maxobs - minobs)            
-            bindefs[obs]=(nobs,minobs,maxobs)
+            try:
+                nobs = int(maxobs - minobs)
+                if obs in ['dsen', 'asen']:
+                    nobs = min(nobs,256)
+                elif nobs>512:
+                    avgobs = int(obsbounds[i+2*len(obslist)].GetValue())
+                    minobs = avgobs-256.5
+                    maxobs = avgobs+256.5
+                    nobs = int(maxobs - minobs)
+                bindefs[obs]=(nobs,minobs,maxobs)
+            except Exception as e:
+                print(f'Could not define binning for {obs} in {module}')
+                print(e)
+                pass
         print(f'Bins determined from sub-sample: {bindefs}')
         
         #fill the histograms with full statistics
-        rdf = HGCALPedestalsClosure.definePedestalsClosureRDF(task_spec)        
+        rdf = HGCALPedestalsClosure.definePedestalsClosureRDF(task_spec)
         profiles = [
             rdf.Histo3D(("envscm",    ';Channel;RecHit energy;CM2',*bindefs['ch'],   *bindefs['cm2'],   *bindefs['en']), "ch", "cm2", "en"),
             rdf.Histo2D(("nchperroc", ';ROC;#channels used',       *bindefs['rocs'], *bindefs['rocch']), "rocidx", "nchperroc"),
@@ -83,7 +96,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
         ROOT.RDF.RunGraphs(profiles)
     
         #write histograms to file
-        rfile=f'{outdir}/{module}.root'
+        rfile=f'{outdir}/{module}_closure.root'
         fOut=ROOT.TFile.Open(rfile,'RECREATE')
         fOut.cd()
         for p in profiles:
@@ -93,7 +106,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
         fOut.Close()
         print(f'Histograms available in {rfile}')
     
-        return True
+        return (module,rfile)
         
     def addCommandLineOptions(self,parser):
         parser.set_defaults(output='calibrations_closure')
@@ -103,10 +116,12 @@ class HGCALPedestalsClosure(HGCALCalibration):
         """profiles the Channel vs ADC vs CM histogram to find pedestals to use"""
 
         typecode, url, cmdargs = args
-
-        #summary of pedestals and noise
+        if not '_closure' in url : return {}
+        typecode = typecode.replace('_closure','')
+        
+        #summary of pedestals and noise                
         results = DAU.profile3DHisto(url,'envscm')
-
+        
         cm_rms = np.array(results['Y_rms'])
         en_loc = np.array(results['Z_mean'])
         en_rms = np.array(results['Z_rms'])
@@ -117,20 +132,25 @@ class HGCALPedestalsClosure(HGCALCalibration):
             'Typecode' : typecode.replace('_','-'),
             'En_ped'   : en_loc.tolist(),
             'En_rms'   : en_rms.tolist(),
-            'CM_slope' : np.where(cm_rms>1e-3, rho*en_rms/cm_rms, noslope).tolist()
         }
 
+        isvalid = (cm_rms>1e-3)
+        cor_values['CM_slope'] = -5*np.ones_like(en_loc)
+        np.divide(rho*en_rms, cm_rms, out=cor_values['CM_slope'], where=isvalid)
+        cor_values['CM_slope'] = cor_values['CM_slope'].tolist()
+        
         #fraction of coherent noise per roc
         nch = np.array(DAU.profile2DHisto(url,'nchperroc')['Y_mean'])
         dsum_rms = np.array(DAU.profile2DHisto(url,'dsen')['Y_rms'])
         asum_rms = np.array(DAU.profile2DHisto(url,'asen')['Y_rms'])
         inc_noise = asum_rms / np.sqrt(nch)
-        coh_noise = np.sqrt(dsum_rms**2 - asum_rms**2) / nch
+        delta2 = dsum_rms**2 - asum_rms**2
+        coh_noise = np.sign(delta2)*np.sqrt( np.abs(delta2) ) / nch
         cnf = coh_noise/inc_noise
         cor_values['Inc_noise'] = np.ravel( [ np.ones(74)*x for x in inc_noise] ).tolist() 
         cor_values['Coh_noise'] = np.ravel( [ np.ones(74)*x for x in coh_noise] ).tolist() 
         cor_values['CNF'] = np.ravel( [ np.ones(74)*x for x in cnf ] ).tolist()
-        
+
         return cor_values
 
 
@@ -138,16 +158,18 @@ class HGCALPedestalsClosure(HGCALCalibration):
         
         """ final tweaks of the analysis results to export as a json file for CMSSW """
 
-        jsonurl = f'{self.output}/pedestalsclosure.json'
+        jsonurl = f'{self.cmdargs.output}/pedestalsclosure.json'
         correctors={}
         for r in results:
+            if not 'Typecode' in r : continue
             typecode = r.pop('Typecode')
             correctors[typecode]=r
         with open(jsonurl,'w') as outfile:
             json.dump(correctors,outfile,sort_keys=False,indent=2)
 
-        rooturl = f'{self.output}/pedestalsclosure_hexplots.root'
-        HPU.createCalibHexPlotSummary(jsonurl,rooturl)
+        if self.cmdargs.doHexPlots:
+            rooturl = f'{self.cmdargs.output}/pedestalsclosure_hexplots.root'
+            HPU.createCalibHexPlotSummary(jsonurl,rooturl)
             
         return jsonurl
 

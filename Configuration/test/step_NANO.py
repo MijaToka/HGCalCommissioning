@@ -4,14 +4,16 @@ from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
 options.register('era', None, VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "reconstruction era")
+options.register('run', None, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "run number")
 options.register('skipRecHits', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "skip RecHits table")
 options.parseArguments()
 
-print(f'Starting NANO with era={options.era} skipRecHits={options.skipRecHits}')
+print(f'Starting NANO with era={options.era} run={options.run} skipRecHits={options.skipRecHits}')
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, _ = initSysValCMSProcess(procname='DQM',era=options.era, maxEvents=options.maxEvents)
+process, _ = initSysValCMSProcess(procname='DQM',era=options.era, run=options.run, maxEvents=options.maxEvents)
 
 process.load('SimGeneral.HepPDTESSource.pythiapdt_cfi')
 process.load('Configuration.EventContent.EventContent_cff')
@@ -66,8 +68,8 @@ process.configurationMetadata = cms.untracked.PSet(
 
 # Output definition
 process.NANOAODoutput = cms.OutputModule("NanoAODOutputModule",
-    compressionAlgorithm = cms.untracked.string('LZMA'),
-    compressionLevel = cms.untracked.int32(9),
+    compressionAlgorithm = cms.untracked.string('ZSTD'),
+    compressionLevel = cms.untracked.int32(5),
     dataset = cms.untracked.PSet(
         dataTier = cms.untracked.string('NANOAOD'),
         filterName = cms.untracked.string('')

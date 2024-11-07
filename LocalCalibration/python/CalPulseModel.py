@@ -13,8 +13,10 @@ class CalPulseModel:
     the plots and fit results will be stored if the fit_out string is passed
     """
 
-    def __init__(self, df, fit_out : str =  ''):
+    def __init__(self, df, fit_out : str =  '', minq_totfit : float = 280.):
 
+        self.minq_totfit = minq_totfit
+        
         #start the backend pdf if required
         self.pdf = matplotlib.backends.backend_pdf.PdfPages(fit_out+'.pdf') if len(fit_out)>0 else None
         
@@ -60,16 +62,19 @@ class CalPulseModel:
 
         mask_base = (data['gain']==gain) & (data['counts']>mincounts)
         mask_adc = (data['isadc']==True) & (data['counts']<maxadc) & mask_base
-        mask_tot = (data['isadc']==0) & mask_base
-        mask_tot_lin = mask_tot & (data['counts']>totlin)        
+        mask_tot = (data['isadc']==0) & mask_base & (data['counts_spread']>1)
+        mask_tot_lin = mask_tot & (data['counts']>totlin) & (data['counts_spread']>1)
 
         #
         #ADC fit
         #
         counts_adc = data[mask_adc]['counts'].values
         counts_adc_unc = 0.5*data[mask_adc]['counts_spread'].values
-        q_adc = data[mask_adc]['inj_q'].values
-        fit_data = RealData(counts_adc, q_adc, sx=counts_adc_unc)
+        q_adc = data[mask_adc]['inj_q'].values        
+        q_per_adc = counts_adc / q_adc
+        q_per_adc_qtl  = np.percentile(q_per_adc[q_adc<160], [16,84])
+        mask_adc_fit = (q_per_adc>  q_per_adc_qtl[0]) & (q_per_adc < q_per_adc_qtl[1])
+        fit_data = RealData(counts_adc[mask_adc_fit], q_adc[mask_adc_fit], sx=counts_adc_unc[mask_adc_fit])
         model = Model(self.chinj_linmodel)
         odr = ODR(fit_data, model, beta0=[5.,150.])
         odr.set_job(fit_type=2) #ordinary least square
@@ -98,7 +103,8 @@ class CalPulseModel:
         counts_tot = data[mask_tot]['counts'].values
         counts_tot_unc = 0.5*data[mask_tot]['counts_spread'].values
         q_tot = data[mask_tot]['inj_q'].values
-        fit_data = RealData(counts_tot, q_tot, sx=counts_tot_unc)
+        mask_tot_fit = (q_tot>self.minq_totfit)
+        fit_data = RealData(counts_tot[mask_tot_fit], q_tot[mask_tot_fit], sx=counts_tot_unc[mask_tot_fit])
         model = Model(self.chinj_nonlinmodel)
         beta0 = popt_tot_lin.tolist() + [totlin,0.]
         odr = ODR(fit_data, model, beta0 = beta0)
@@ -114,12 +120,12 @@ class CalPulseModel:
             [
                 fit_title,
                 rf'$\chi^2$/dof = {chi2_adc:3.0f} / {dof_adc:d}',
-                f'k = {popt_adc[0]:3.3f}',
+                f'k = {popt_adc[0]:3.3f} counts/fC',
                 rf'p = {popt_adc[1]:3.0f}'
             ],
             [
                 rf'$\chi^2/dof$ = {chi2_tot:3.0f} / {dof_tot:d}',
-                f'k = {popt_tot[0]:3.3f}',
+                f'k = {popt_tot[0]:3.3f} counts/fC',
                 f'p = {popt_tot[1]:3.0f}',
                 f'a = {popt_tot[2]:3.0f}',
                 rf'$x_{{0}}$ = {popt_tot[3]:e}'
@@ -158,7 +164,7 @@ class CalPulseModel:
         #linear branch
         clin = CalPulseModel.chinj_linmodel([k,p],x)
         
-        #non-linear branchx
+        #non-linear branch
         b = k - 2*a*x0
         c = a*(x0**2) - k*p
         cnonlin = a*x*x + b*x + c
@@ -181,7 +187,8 @@ class CalPulseModel:
         
         ebar_style={'marker':'o','elinewidth':1,'capsize':1,'color':'k','ls':'none'}
         for i in range(2):
-            ax[i].plot( xlist[i], ypredlist[i], ls='-', c='blue' )
+            idxsort = np.argsort(xlist[i])
+            ax[i].plot( xlist[i][idxsort], ypredlist[i][idxsort], ls='-', c='blue' )
             ax[i].errorbar( xlist[i], ylist[i], xerr=yunclist[i], **ebar_style )
             ax[i].grid()
             ax[i].set_xlabel('{} counts'.format('ADC' if i==0 else 'TOT'))

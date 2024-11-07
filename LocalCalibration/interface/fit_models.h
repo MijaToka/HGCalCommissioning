@@ -63,7 +63,7 @@ RooWorkspace *defineMIPFitWorkspace(float xmin=-10,float xmax=50,
                                     float pedestalmin=-10, float pedestalmax=10,
                                     float noisemin=0.5, float noisemax=10.,
                                     float mpvlmin=5., float mpvlmax=35.,
-                                    float singlemip_fracmin=0.6) {
+                                    float singlemip_fracmin=0.95) {
 
   using namespace RooFit;
 
@@ -78,10 +78,12 @@ RooWorkspace *defineMIPFitWorkspace(float xmin=-10,float xmax=50,
  
   // signal pdf : landau (x) gauss
   RooRealVar mpv1("mpv", "MPV landau", mpvlmin, mpvlmax);
-  RooFormulaVar mpv2("mpv2","2*@0",RooArgList(mpv1));   
+  //w.factory("expr::S('mu*Snom',mu[1,-3,6],Snom[50])") ;
+  RooFormulaVar mpv_loc("mpv_loc", "@0+@1", RooArgList(loc, mpv1));
+  RooFormulaVar mpv2_loc("mpv2","2*@0+@1",RooArgList(mpv1, loc));   
   RooRealVar sigmal("sigmal", "Width landau", 1, 1, mpvlmax*2);
-  RooLandau singlemip_landau("singlemip_landau", "Sungle MIP Landau PDF", x, mpv1, sigmal);
-  RooLandau doublemip_landau("doublemip_landau", "Double MIP Landau PDF", x, mpv2, sigmal);
+  RooLandau singlemip_landau("singlemip_landau", "Sungle MIP Landau PDF", x, mpv_loc, sigmal);
+  RooLandau doublemip_landau("doublemip_landau", "Double MIP Landau PDF", x, mpv2_loc, sigmal);
   RooFFTConvPdf singlemip_pdf("singlemip_pdf", "single mip (X) gaus", x, singlemip_landau, noise0_pdf);
   RooFFTConvPdf doublemip_pdf("doublemip_pdf", "single mip (X) gaus", x, doublemip_landau, noise0_pdf);
   
@@ -102,7 +104,7 @@ RooWorkspace *defineMIPFitWorkspace(float xmin=-10,float xmax=50,
 /**
    @short runs the MIP fit on a histogram and returns the result summary
  */
-MIPFitResults runMIPFit(TH1 *h, RooAbsPdf *model, RooRealVar *x) {
+MIPFitResults runMIPFit(TH1 *h, RooAbsPdf *model, RooRealVar *x, TString range_name="") {
 
   using namespace RooFit;
   
@@ -113,8 +115,16 @@ MIPFitResults runMIPFit(TH1 *h, RooAbsPdf *model, RooRealVar *x) {
   int nbins = h->GetNbinsX();
   x->setBins(nbins);
 
-  //run a chi2 fit
-  RooFitResult *res= model->chi2FitTo(*dh, Save(1));
+  RooFitResult *res = 0;
+
+  if (range_name != ""){
+    res= model->chi2FitTo(*dh, Save(1), Range(range_name));
+    std:: cout << __LINE__ << endl;
+  } else {
+    //run a chi2 fit
+    res= model->chi2FitTo(*dh, Save(1));
+    std:: cout << __LINE__ << endl;
+  }
 
   //fill the summary
   MIPFitResults toReturn;

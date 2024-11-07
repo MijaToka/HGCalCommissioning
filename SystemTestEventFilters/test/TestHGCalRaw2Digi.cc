@@ -80,7 +80,7 @@ void TestHGCalRawToDigi::endRun(edm::Run const& iRun, edm::EventSetup const& iSe
     std::cout << std::setw(6) << ("evt" + std::to_string(i+1));
   }
   std::cout << std::endl;
-  for (unsigned fedId = 0; fedId < moduleIndexer_.nfeds_; ++fedId) {
+  for (unsigned fedId = 0; fedId < moduleIndexer_.fedCount(); ++fedId) {
     const auto econdMax = moduleIndexer_.getMaxModuleSize(fedId);
     for (uint32_t econdIdx = 0; econdIdx < econdMax; econdIdx++) {
       const auto erxMax = moduleIndexer_.getMaxERxSize(fedId,econdIdx);
@@ -105,7 +105,7 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
   // CREATE DIGIs
   // std::cout << "Created DIGIs SOA with " << digis.view().metadata().size() << " entries" << std::endl;
   const auto& raw_data = iEvent.get(fedRawToken_);
-  for (unsigned fedId = 0; fedId < moduleIndexer_.nfeds_; ++fedId) {
+  for (unsigned fedId = 0; fedId < moduleIndexer_.fedCount(); ++fedId) {
     const auto& fed_data = raw_data.FEDData(fedId);
     if (fed_data.size() == 0)
       continue;
@@ -113,7 +113,7 @@ void TestHGCalRawToDigi::produce(edm::Event& iEvent, const edm::EventSetup& iSet
   }
   
   // CHECK DIGIs
-  for (unsigned fedId = 0; fedId < moduleIndexer_.nfeds_; ++fedId) {
+  for (unsigned fedId = 0; fedId < moduleIndexer_.fedCount(); ++fedId) {
     //std::cout << "fed=" << fedId << std::endl;
     const auto econdMax = moduleIndexer_.getMaxModuleSize(fedId);
     for (uint32_t econdIdx = 0; econdIdx < econdMax; econdIdx++) {

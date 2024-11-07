@@ -5,15 +5,18 @@ from FWCore.ParameterSet.VarParsing import VarParsing
 options = VarParsing('standard')
 options.register('era', None, VarParsing.multiplicity.singleton, VarParsing.varType.string,
                  "reconstruction era")
+options.register('run', None, VarParsing.multiplicity.singleton, VarParsing.varType.int,
+                 "run number")
 options.register('gpu', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "run on GPUs")
 options.parseArguments()
 
 # get the configuration for this era
 era = options.era
-print(f'Starting RECO with era={era}')
+run = options.run
+print(f'Starting RECO with era={era} run={run}')
 from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, eraConfig = initSysValCMSProcess( procname='RECO', era=era, maxEvents=options.maxEvents)
+process, eraConfig = initSysValCMSProcess( procname='RECO', era=era, run=run, maxEvents=options.maxEvents)
     
 # SOURCE
 process.source = cms.Source("PoolSource",
@@ -53,7 +56,8 @@ process.output = cms.OutputModule(
   "PoolOutputModule",
   fileName=cms.untracked.string(options.output),
   outputCommands=cms.untracked.vstring(
-    'keep *'
+    'keep *',
+    'drop FEDRawDataCollection_*_*_*',
   ),
   SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
 )
