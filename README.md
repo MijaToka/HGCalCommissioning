@@ -20,4 +20,12 @@ A brief description of the sub-directories is made in the following table
 | -------- | ------- |
 | SystemTestEventFilters  | Event filters to convert system test data to raw DIGIs |
 | LocalCalibration  | Analysis scripts to produce level-0 calibration quantities/cond files |
-| LocalProduction | Some basic scripts to produce samples with D99 geometry |
+| Configuration | standard workflows (CMSSW cfg and snakemake files) and module maps |
+| NanoTools | Customized NANO for DPG purposes |
+| DQM | Implement here that plot that everyone wants to see |
+| LocalProduction | Some basic scripts to produce samples with standard CMSSW |
+
+This repository is complemented by [hgcal-dpg](https://gitlab.cern.ch/hgcal-dpg/calibrations) which contains the calibration files for the offline.
+
+More info @ [hgcaldocs website](https://hgcaldocs.web.cern.ch)
+
