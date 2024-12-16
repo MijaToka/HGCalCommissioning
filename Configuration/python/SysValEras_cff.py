@@ -82,8 +82,14 @@ def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int =
     process.MessageLogger.cerr.FwkReport.reportEvery = 50000
 
     #geometry and indexing
-    process.load(f"Configuration.Geometry.GeometryExtended2026D104Reco_cff")
-    process.load(f"Configuration.Geometry.GeometryExtended2026D104_cff")
+    import os
+    geometry = "GeometryExtendedRun4D104" # for CMSSW >= 14.2
+    geomfile = os.path.join(os.getenv('CMSSW_RELEASE_BASE',"nocmssw"),f"src/Configuration/Geometry/python/{geometry}Reco_cff.py")
+    if not os.path.isfile(geomfile):
+        print(f"Warning! Could not find {geometry} for CMSSW >= 14.2 in {geomfile}, using 2026 instead...")
+        geometry = "GeometryExtended2026D104" # for CMSSW <= 14.1
+    process.load(f"Configuration.Geometry.{geometry}Reco_cff")
+    process.load(f"Configuration.Geometry.{geometry}_cff")
     from Geometry.HGCalMapping.hgcalmapping_cff import customise_hgcalmapper
     process = customise_hgcalmapper(process, modules=eraConfig['modules'])
 
