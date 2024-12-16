@@ -81,7 +81,7 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         fOut.Close()
         print(f'Histograms available in {rfile}')
     
-        return True
+        return (module,rfile) #True
 
     def addCommandLineOptions(self,parser):
         """add specific command line options for pedestals"""
@@ -152,7 +152,7 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         return jsonurl
 
     @staticmethod
-    def findBestTrigTimePerChannel(h,krms=2, maxDrop=0.95):
+    def findBestTrigTimePerChannel(h, krms=4, maxDrop=0.95):
         """analyzes a 3D histogram of channel vs trig time vs observable
         for each channel determines the RMS from the inclusive distribution of the observable
         a threshold is then defined loc + krms*RMS
@@ -160,52 +160,51 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
         as function of trigtime and finds it's maximum
         the proposed trig time range (by which it drops at most by maxDrop) is returned per channel
         """
-        coi_trigtime={}
-        nx,xmin,xmax=h.GetNbinsX(),h.GetXaxis().GetXmin(),h.GetXaxis().GetXmax()
-        ny,ymin,ymax=h.GetNbinsY(),h.GetYaxis().GetXmin(),h.GetYaxis().GetXmax()
-        nz,zmin,zmax=h.GetNbinsZ(),h.GetZaxis().GetXmin(),h.GetZaxis().GetXmax()
-        hyz=ROOT.TH2F('pyz','',ny,ymin,ymax,nz,zmin,zmax)
+        coi_trigtime = { }
+        nx, xmin, xmax = h.GetNbinsX(), h.GetXaxis().GetXmin(), h.GetXaxis().GetXmax()
+        ny, ymin, ymax = h.GetNbinsY(), h.GetYaxis().GetXmin(), h.GetYaxis().GetXmax()
+        nz, zmin, zmax = h.GetNbinsZ(), h.GetZaxis().GetXmin(), h.GetZaxis().GetXmax()
+        hyz     = ROOT.TH2F('pyz','',ny,ymin,ymax,nz,zmin,zmax)
+        loc_all = h.GetMean(3) # mean energy for the whole module
+        rms_all = h.GetRMS(3)
+        Emax    = max(7.5,loc_all+4.2*rms_all) # max energy to compute unbiased noise threshold
+        zbinmax = h.GetZaxis().FindBin(Emax)
+        #print(f">>> Module {typecode}: ped={loc_all:+6.3f}, rms={rms_all:6.3f} => Emax = {Emax:4.2f}")
         for xbin in range(nx):
-        
+
+            # make yz slice for channel x
             hyz.Reset('ICE')            
             for ybin,zbin in itertools.product(range(ny),range(nz)):
                 hyz.SetBinContent(ybin+1,zbin+1, h.GetBinContent(xbin+1,ybin+1,zbin+1) )
 
             #determine a noise threshold from the inclusive distribution of the observable
+            hyz.GetYaxis().SetRange(1,zbinmax) # apply E<Emax limit to unbias the mean/rms computation
             loc = hyz.GetMean(2)
             rms = hyz.GetRMS(2)
+            hyz.GetYaxis().SetRange(0,0) # reset range
             if rms<1e-6:
                 coi_trigtime[xbin]=None
                 continue
 
-            #now profile the observable for values above the noise
-            meanz=[]
-            for ybin in range(ny):
+            #bin to start integrating from
+            zcut = loc+krms*rms # theshold above noise
+            zbinmin = h.GetZaxis().FindBin(zcut)+1
 
-                #project at fixed trig time
-                hz = hyz.ProjectionY('pz',ybin+1,ybin+1)
-            
-                #bin to start integrating from
-                zbinmin = hz.FindBin(loc+krms*rms)+1
+            #now profile the observable for values above the noise (E > Emin)
+            meanz = np.zeros(ny) # array with default zeroes
+            isempty = (zbinmin<=1 or zbinmin>nz)
+            if not isempty:
+                for ybin in range(2,ny+1): # exclude trigphase<1 (ybin=1)
+                    sumw, sumzw = 0., 0.
+                    for zbin in range(zbinmin,nz+1):
+                        z = hyz.GetYaxis().GetBinCenter(zbin) # energy
+                        w = hyz.GetBinContent(ybin,zbin) # number of hits
+                        sumw += w # total number of hits
+                        sumzw += z*w # total energy
+                    if sumw>0:
+                        meanz[ybin-1] = sumzw/sumw
 
-                #if bin not valid, set mean to 0 and continue
-                if zbinmin==0 or zbinmin>nz:
-                    meanz.append(0)
-                    hz.Delete()
-                    continue
-
-                #compute the truncated mean
-                sumw, sumzw = 0., 0.
-                for zbin in range(zbinmin,nz+1):
-                    z = hz.GetXaxis().GetBinCenter(zbin)
-                    w = hz.GetBinContent(zbin)
-                    sumw += w
-                    sumzw += z*w
-                meanz.append( sumzw/sumw if sumw>0. else 0. )
-                hz.Delete()
-        
             #determine the acceptable trigtime window
-            meanz = np.array(meanz)        
             max_meanz = meanz.max()
             if max_meanz>0:
                 accept =  np.argwhere(meanz/max_meanz > maxDrop).ravel().tolist()

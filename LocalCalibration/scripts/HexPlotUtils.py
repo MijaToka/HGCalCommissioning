@@ -3,7 +3,7 @@ import ROOT
 import argparse
 import json
 from HGCalCommissioning.LocalCalibration.plot.wafer import fill_wafer_hist
-    
+
 def createCalibHexPlotSummary(jsonfile : str, outputfile : str) :
     """
     Opens a json calibration file and fills the appropriate hexplots for every parameter

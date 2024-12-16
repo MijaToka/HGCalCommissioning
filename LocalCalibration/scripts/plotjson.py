@@ -9,7 +9,7 @@
 #   https://gitlab.cern.ch/hgcal-dpg/hgcal-sysval-offline/-/merge_requests/13
 import os, re
 import json
-from HGCalCommissioning.LocalCalibration.plot.wafer import *
+from HGCalCommissioning.LocalCalibration.plot.wafer_plotly import *
 import plotly.graph_objects as go
 colorscale, colorscale_tuple = getcolorscale('RdBu',invert=True)
 
