@@ -1,0 +1,84 @@
+#ifndef HGCalCommissioning_SystemTestEventFilters_HGCalTrgDataProvenanceHelper_h
+#define HGCalCommissioning_SystemTestEventFilters_HGCalTrgDataProvenanceHelper_h
+
+#include "DataFormats/Provenance/interface/ProcessHistoryRegistry.h"
+#include "DataFormats/Provenance/interface/ProductRegistry.h"
+#include "FWCore/Utilities/interface/GetPassID.h"
+#include "FWCore/Utilities/interface/TypeID.h"
+#include "FWCore/Reflection/interface/TypeWithDict.h"
+#include "FWCore/Version/interface/GetReleaseVersion.h"
+#include "DataFormats/Provenance/interface/ProcessHistoryID.h"
+#include "FWCore/ParameterSet/interface/ParameterSet.h"
+
+/**
+   @short auxiliary structure to build the provenance for trigger data based on FWCore/Sources/interface/DaqProvenanceHelper.h
+ */
+class HGCalTrgDataProvenanceHelper {
+  
+public:
+  
+  HGCalTrgDataProvenanceHelper(edm::TypeID const& metaDataType)
+    : branchDesc_(makeDescription(metaDataType,"FEDRawDataCollection", "FEDRawDataCollection", "HGCalSlinkFromRawSource")),
+      processParameterSet_() {
+    dummyProvenance_=edm::ProductProvenance(branchDesc_.branchID());
+
+    std::string const& moduleLabel = branchDesc_.moduleLabel();
+    std::string const& processName = branchDesc_.processName();
+    std::string const& moduleName = branchDesc_.moduleName();
+    typedef std::vector<std::string> vstring;
+    vstring empty;
+
+    vstring modlbl;
+    modlbl.reserve(1);
+    modlbl.push_back(moduleLabel);
+    processParameterSet_.addParameter("@all_sources", modlbl);
+
+    edm::ParameterSet triggerPaths;
+    triggerPaths.addParameter<vstring>("@trigger_paths", empty);
+    processParameterSet_.addParameter<edm::ParameterSet>("@trigger_paths", triggerPaths);
+
+    edm::ParameterSet pseudoInput;
+    pseudoInput.addParameter<std::string>("@module_edm_type", "Source");
+    pseudoInput.addParameter<std::string>("@module_label", moduleLabel);
+    pseudoInput.addParameter<std::string>("@module_type", moduleName);
+    processParameterSet_.addParameter<edm::ParameterSet>(moduleLabel, pseudoInput);
+
+    processParameterSet_.addParameter<vstring>("@all_esmodules", empty);
+    processParameterSet_.addParameter<vstring>("@all_esprefers", empty);
+    processParameterSet_.addParameter<vstring>("@all_essources", empty);
+    processParameterSet_.addParameter<vstring>("@all_loopers", empty);
+    processParameterSet_.addParameter<vstring>("@all_modules", empty);
+    processParameterSet_.addParameter<vstring>("@end_paths", empty);
+    processParameterSet_.addParameter<vstring>("@paths", empty);
+    processParameterSet_.addParameter<std::string>("@process_name", processName);
+    processParameterSet_.registerIt();
+  }
+  
+  inline static edm::BranchDescription makeDescription(edm::TypeID const& rawDataType,std::string const& collectionName,std::string const& friendlyName,std::string const& sourceLabel) {
+    edm::BranchDescription desc(edm::InEvent, "trgRawDataCollector", "LHC", collectionName, friendlyName, "", sourceLabel, edm::ParameterSetID(), edm::TypeWithDict(rawDataType.typeInfo()),false);
+    desc.setIsProvenanceSetOnRead(); 
+    return desc;
+  }
+  
+  inline edm::ProductProvenance const& dummyProvenance() const { return dummyProvenance_; }
+  
+  inline edm::BranchDescription const& branchDescription() const { return branchDesc_; }
+  
+  inline edm::ProcessHistoryID init(edm::ProductRegistry& productRegistry, edm::ProcessHistoryRegistry& processHistoryRegistry) const {
+
+    productRegistry.copyProduct(branchDesc_);
+    
+    edm::ProcessHistory ph;
+    ph.emplace_back(branchDesc_.processName(), processParameterSet_.id(), edm::getReleaseVersion(), edm::getPassID());
+    processHistoryRegistry.registerProcessHistory(ph);
+    return ph.id();
+  }
+  
+private:
+  edm::BranchDescription const branchDesc_;
+  edm::ProductProvenance dummyProvenance_;
+  edm::ParameterSet processParameterSet_;
+};
+
+
+#endif

@@ -27,6 +27,7 @@
 
 #include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalSlinkFileReader.h"
 #include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalMetaDataProvenanceHelper.h"
+#include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalTrgDataProvenanceHelper.h"
 
 class InputSourceDescription;
 class ParameterSet;
@@ -58,13 +59,14 @@ private:
   unsigned trig_scintillator_block_id_;
 
   const edm::DaqProvenanceHelper daqProvenanceHelper_;
+  const HGCalTrgDataProvenanceHelper trgProvenanceHelper_;
   const HGCalMetaDataProvenanceHelper metadataProvenanceHelper_;
   edm::EventID eventID_;
   edm::ProcessHistoryID processHistoryID_;
   std::unique_ptr<edm::EventSkipperByID> eventSkipperByID_;
 
   std::map<unsigned, std::shared_ptr<hgcal::SlinkFileReader>> readers_;
-  std::unique_ptr<FEDRawDataCollection> rawData_;
+  std::unique_ptr<FEDRawDataCollection> rawData_, trgRawData_;
   std::unique_ptr<HGCalTestSystemMetaData> metaData_;
 };
 

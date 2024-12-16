@@ -8,5 +8,14 @@
 <use name="Geometry/HGCalMapping"/>
 <use name="HGCalCommissioning/SystemTestEventFilters"/>
 <use name="HGCalCommissioning/DQM"/>
+<use name="HGCalCommissioning/HGCalDigiTrigger"/>
 <use name="eigen"/>
+<use name="rootcore"/>
+<use name="rootgraphics"/>
+<use name="rootgpad"/>
+<use name="rootphysics"/>
+<use name="rootmathcore"/>
+<use name="rootgui"/>
+<use name="rootgeom"/>
+<use name="roothistpainter"/>
 <flags EDM_PLUGIN="1"/>

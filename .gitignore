@@ -1,3 +1,6 @@
 *output*.root
 DQM*R*.root*
 __pycache__
+
+FrameworkJobReport_DQM.xml
+RAW2DIGI*.root

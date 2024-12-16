@@ -18,6 +18,7 @@
 HGCalSlinkFromRawSource::HGCalSlinkFromRawSource(edm::ParameterSet const& pset, edm::InputSourceDescription const& desc)
     : edm::RawInputSource(pset, desc),
       daqProvenanceHelper_(edm::TypeID(typeid(FEDRawDataCollection))),
+      trgProvenanceHelper_(edm::TypeID(typeid(FEDRawDataCollection))),
       metadataProvenanceHelper_(edm::TypeID(typeid(HGCalTestSystemMetaData))),
       eventID_(),
       processHistoryID_(),
@@ -35,6 +36,7 @@ HGCalSlinkFromRawSource::HGCalSlinkFromRawSource(edm::ParameterSet const& pset, 
 
   //init provenance helpers and run aux
   processHistoryID_ = metadataProvenanceHelper_.init(productRegistryUpdate(), processHistoryRegistryForUpdate());
+  processHistoryID_ = trgProvenanceHelper_.init(productRegistryUpdate(), processHistoryRegistryForUpdate());
   processHistoryID_ = daqProvenanceHelper_.daqInit(productRegistryUpdate(), processHistoryRegistryForUpdate());
   setNewRun();
   setRunAuxiliary(
@@ -154,6 +156,9 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
   std::unique_ptr<edm::WrapperBase> edp(new edm::Wrapper<FEDRawDataCollection>(std::move(rawData_)));
   eventPrincipal.put(daqProvenanceHelper_.branchDescription(), std::move(edp), daqProvenanceHelper_.dummyProvenance());
 
+  std::unique_ptr<edm::WrapperBase> trgedp(new edm::Wrapper<FEDRawDataCollection>(std::move(trgRawData_)));
+  eventPrincipal.put(trgProvenanceHelper_.branchDescription(), std::move(trgedp), trgProvenanceHelper_.dummyProvenance());
+
   std::unique_ptr<edm::WrapperBase> emd(new edm::Wrapper<HGCalTestSystemMetaData>(std::move(metaData_)));
   eventPrincipal.put(
       metadataProvenanceHelper_.branchDescription(), std::move(emd), metadataProvenanceHelper_.dummyProvenance());
@@ -162,12 +167,13 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
 //
 bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
   rawData_ = std::make_unique<FEDRawDataCollection>();
+  trgRawData_ = std::make_unique<FEDRawDataCollection>();
   metaData_ = std::make_unique<HGCalTestSystemMetaData>();
 
   auto copyToFEDRawData =
       [](FEDRawDataCollection& rawData, const hgcal_slinkfromraw::RecordRunning* rEvent, unsigned fedId) {
         using T = FEDRawData::Data::value_type;
-        const auto size = sizeof(uint64_t) / sizeof(T) * (rEvent->payloadLength());
+        const auto size = sizeof(uint64_t) / sizeof(T) * (rEvent->payloadLength());        
         auto& fed_data = rawData.FEDData(fedId);
         fed_data.resize(size);
         memcpy(fed_data.data(), reinterpret_cast<const T*>(rEvent->payload()), size);
@@ -256,8 +262,8 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
           }
         }
       }
-    }
-  }
+    }//end read trigger Slink
+  }//end event read
 
   return true;
 }

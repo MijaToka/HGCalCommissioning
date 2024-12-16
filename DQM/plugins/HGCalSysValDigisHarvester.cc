@@ -31,10 +31,14 @@
 #include "CondFormats/HGCalObjects/interface/HGCalMappingModuleIndexer.h"
 #include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
 
+#include "HGCalCommissioning/HGCalRawToDigiTrigger/interface/HGCalModuleIndexerTrigger.h"
+
 #include <TDatime.h>
 #include <TString.h>
 #include <TFile.h>
 #include <TKey.h>
+#include <TGraph.h>
+#include <TPolyLine.h>
 
 #include <fstream>
 #include <iostream>
@@ -59,7 +63,17 @@ protected:
                              DQMStore::IGetter &,
                              edm::LuminosityBlock const &,
                              edm::EventSetup const &);
+  void dqmDAQHexaPlots(DQMStore::IBooker &,
+                       DQMStore::IGetter &,
+                       edm::LuminosityBlock const &,
+                       edm::EventSetup const &);
+  void dqmTriggerHexaPlots(DQMStore::IBooker &,
+                           DQMStore::IGetter &,
+                           edm::LuminosityBlock const &,
+                           edm::EventSetup const &);
   void dqmEndJob(DQMStore::IBooker &, DQMStore::IGetter &) override;
+
+  std::map<TGraph*, double> extractBinLocations(TH2Poly* hist);
 
 private:
 
@@ -79,6 +93,11 @@ private:
   MonitorElement *occupancyLayer_, *occupancyModule_, *meTimestamp_;
   std::map<unsigned int, MonitorElement *> hexLayerPlots_;
   std::map<std::string, std::map<std::string, MonitorElement *> > hexPlots_;  
+
+  HGCalModuleIndexerTrigger moduleIndexerTrigger_;
+  std::vector<std::string> BXlist = {"BXm3", "BXm2", "BXm1", "BX0", "BXp1", "BXp2", "BXp3"};
+  std::map<int, char> irotstates_trigger = {{0,0},{1,1},{2,2}};
+
 };
 
 //
@@ -108,7 +127,15 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
                                                       DQMStore::IGetter &igetter,
                                                       edm::LuminosityBlock const &iLumi,
                                                       edm::EventSetup const &iSetup) {
+   dqmDAQHexaPlots(ibooker, igetter, iLumi, iSetup);
+   dqmTriggerHexaPlots(ibooker, igetter, iLumi, iSetup); 
+}
 
+
+void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
+                                                      DQMStore::IGetter &igetter,
+                                                      edm::LuminosityBlock const &iLumi,
+                                                      edm::EventSetup const &iSetup) {
   
   //read the available modules from the ECON-D payload histogram
   std::vector<std::string> typecodes;
@@ -305,6 +332,120 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
 
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
 }
+
+
+void HGCalSysValDigisHarvester::dqmTriggerHexaPlots(DQMStore::IBooker &ibooker,
+                                                      DQMStore::IGetter &igetter,
+                                                      edm::LuminosityBlock const &iLumi,
+                                                      edm::EventSetup const &iSetup) {
+  ibooker.setCurrentFolder("HGCAL/Modules");
+  std::string typecode = "ML_F_TC";
+  std::string digiDir = "HGCAL/Digis/";
+
+  hexPlots_[typecode]["channel_test"] = ibooker.book2DPoly("hex_channel_test",  typecode + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::CMAVG), -150, 150, -150, 150);
+  int nLayers = 2;
+  int nModules = 3;
+  for(auto BX : BXlist) {
+    for(int layer = 0; layer < nLayers; layer++) {
+      for(int module = 0; module < nModules; module++) {
+        std::string module_energy_path = BX + "_energy_layer_" + std::to_string(layer) + "_module_" + std::to_string(module);
+        hexPlots_[typecode][module_energy_path] = ibooker.book2DPoly(module_energy_path,  typecode + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::CMAVG), -150, 150, -150, 150);
+        std::string module_location_path = BX + "_location_layer_" + std::to_string(layer) + "_module_" + std::to_string(module);
+        hexPlots_[typecode][module_location_path] = ibooker.book2DPoly(module_location_path,  typecode + "; x[cm]; y[cm];"+getLabelForSummaryIndex(SummaryIndices_t::CMAVG), -150, 150, -150, 150);
+      }
+    }
+  }
+
+  std::string geourl = templateDir_ + "/geometry_" + typecode + "_wafer.root";  
+  edm::FileInPath fip(geourl);
+  TFile *fgeo = new TFile(fip.fullPath().c_str(), "R");
+  
+  TH2Poly *hex = (TH2Poly *)fgeo->Get("hex");
+
+  std::map<TGraph*, double> hexPlots = extractBinLocations(hex);
+
+  int i = 0;
+  for (auto const& [polygon, channel] : hexPlots) {
+
+    hexPlots_[typecode]["channel_test"]->addBin(polygon);
+    hexPlots_[typecode]["channel_test"]->setBinContent(i+1, channel);
+
+
+    for(auto BX : BXlist) {
+      for(int layer = 0; layer < nLayers; layer++) {
+        for(int module = 0; module < nModules; module++) {
+
+          std::string module_energy_path = BX + "_energy_layer_" + std::to_string(layer) + "_module_" + std::to_string(module);
+          std::string channel_energy_path = digiDir + module_energy_path + "_channel_" + std::to_string(static_cast<int>(channel));
+          const MonitorElement *energy_element = igetter.get(channel_energy_path);
+          if (!energy_element) {
+            std::cerr << "Error: Could not find MonitorElement for " << channel_energy_path << std::endl;
+            continue;
+          }
+          const TH1F* energy_hist = energy_element->getTH1F();
+          double energy = 0;
+          if (energy_hist) { energy = energy_hist->GetMean(); }
+
+          // make a deep copy of the polygon
+          auto polygon_ = new TGraph(*polygon);
+          char irot = irotstates_trigger[module];
+          // rotateShape(polygon_,irot);
+
+          hexPlots_[typecode][module_energy_path]->addBin(polygon_);
+          hexPlots_[typecode][module_energy_path]->setBinContent(i+1, energy);
+
+          std::string module_location_path = BX + "_location_layer_" + std::to_string(layer) + "_module_" + std::to_string(module);
+          std::string channel_location_path = digiDir + module_location_path + "_channel_" + std::to_string(static_cast<int>(channel));
+          const MonitorElement *location_element = igetter.get(channel_location_path);
+          if (!location_element) {
+            std::cerr << "Error: Could not find MonitorElement for " << channel_location_path << std::endl;
+            continue;
+          }
+          const TH1F* location_hist = location_element->getTH1F();
+          double location = 0;
+          if (location_hist) { location = location_hist->GetMean(); }
+          hexPlots_[typecode][module_location_path]->addBin(polygon);
+          hexPlots_[typecode][module_location_path]->setBinContent(i+1, location);
+        }
+      }
+    }
+
+    i++;
+  }
+
+  fgeo->Close();
+
+}
+
+std::map<TGraph*, double> HGCalSysValDigisHarvester::extractBinLocations(TH2Poly* hist) {
+  // Get the list of bins from the TH2Poly
+  
+  std::map<TGraph*, double> hexPlots;
+  TList* bins = hist->GetBins();
+  if (!bins) {
+    std::cout << "No bins found in the TH2Poly." << std::endl;
+    return hexPlots;
+  }
+
+  // Loop over all bins
+  for (int i = 0; i < bins->GetSize(); ++i) {
+    // Get the current bin as a TPolyLine
+    TH2PolyBin* bin = dynamic_cast<TH2PolyBin*>(bins->At(i));
+
+    double channel = hist->GetBinContent(i+1);
+
+    if (bin) {
+      // Get the number of vertices in the bin
+      TGraph* polygon = dynamic_cast<TGraph*>(bin->GetPolygon());
+
+      hexPlots[polygon] = channel;
+    } else {
+      std::cout << "Error: Bin " << i << " is not a valid TPolyLine." << std::endl;
+    }
+  }
+  return hexPlots;
+}
+
 
 //
 void HGCalSysValDigisHarvester::rotateShape(TGraph *gr, char irot) {
