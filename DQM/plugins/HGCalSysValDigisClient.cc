@@ -6,10 +6,12 @@
 #include "DQMServices/Core/interface/DQMEDAnalyzer.h"
 #include "DQMServices/Core/interface/MonitorElement.h"
 
+
 #include "DataFormats/HGCalDigi/interface/HGCalDigiHost.h"
 #include "DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoSoA.h"
 #include "DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoHost.h"
 #include "DataFormats/HGCalDigi/interface/HGCalRawDataDefinitions.h"
+#include "HGCalCommissioning/HGCalDigiTrigger/interface/HGCalDigiTriggerHost.h"
 
 #include "CondFormats/DataRecord/interface/HGCalDenseIndexInfoRcd.h"
 #include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
@@ -20,6 +22,8 @@
 #include "HGCalCommissioning/DQM/interface/HGCalECONDPacketAnalysis.h"
 #include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalTestSystemMetaData.h"
 #include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
+
+#include "HGCalCommissioning/HGCalRawToDigiTrigger/interface/HGCalModuleIndexerTrigger.h"
 
 #include <TString.h>
 
@@ -78,7 +82,8 @@ private:
   void analyze(const edm::Event&, const edm::EventSetup&) override;
   void analyzeECONDFlags(const edm::Event& iEvent, const edm::EventSetup& iSetup);
   void analyzeModules(const edm::Event& iEvent, const edm::EventSetup& iSetup, int trigTime);
-  
+  void analyzeTriggerModules(const edm::Event& iEvent, const edm::EventSetup& iSetup, int trigTime);
+
   /** 
     @short for each module finds the channel with largest delta ADC to be used for special monitoring histograms
   */
@@ -87,6 +92,7 @@ private:
   // ------------ member data ------------
   const edm::EDGetTokenT<FEDRawDataCollection> fedRawToken_;
   const edm::EDGetTokenT<hgcaldigi::HGCalDigiHost> digisTkn_;
+  const edm::EDGetTokenT<hgcaldigi::HGCalDigiTriggerHost> digisTriggerTkn_;
   const edm::EDGetTokenT<hgcaldigi::HGCalECONDPacketInfoHost> econdInfoTkn_;
   const edm::EDGetTokenT<HGCalTestSystemMetaData> metaDataTkn_;
   edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIdxTkn_;
@@ -102,6 +108,11 @@ private:
 
   MonitorElement *trigTimeH_,*trigTypeH_;
   MonitorElement *econdQualityH_, *cbQualityH_, *econdPayload_;
+
+  HGCalModuleIndexerTrigger moduleIndexerTrigger_;
+  std::map<std::string, std::map<uint32_t, MonitorElement*> > moduleTriggerHistos_;
+
+  std::vector<std::string> BXlist = {"BXm3", "BXm2", "BXm1", "BX0", "BXp1", "BXp2", "BXp3"};
 };
 
 
@@ -109,6 +120,7 @@ private:
 HGCalSysValDigisClient::HGCalSysValDigisClient(const edm::ParameterSet& iConfig)
     : fedRawToken_(consumes<FEDRawDataCollection>(iConfig.getParameter<edm::InputTag>("Raw"))),
       digisTkn_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("Digis"))),
+      digisTriggerTkn_(consumes<hgcaldigi::HGCalDigiTriggerHost>(iConfig.getParameter<edm::InputTag>("DigisTrigger"))),
       econdInfoTkn_(consumes<hgcaldigi::HGCalECONDPacketInfoHost>(iConfig.getParameter<edm::InputTag>("ECONDPacketInfo"))), //FlaggedECONDInfo
       metaDataTkn_(consumes<HGCalTestSystemMetaData>(iConfig.getParameter<edm::InputTag>("MetaData"))),
       moduleIdxTkn_(esConsumes<edm::Transition::BeginRun>()),
@@ -127,6 +139,7 @@ void HGCalSysValDigisClient::fillDescriptions(edm::ConfigurationDescriptions& de
   edm::ParameterSetDescription desc;
   desc.add<edm::InputTag>("Raw", edm::InputTag("rawDataCollector"));
   desc.add<edm::InputTag>("Digis", edm::InputTag("hgcalDigis", ""));
+  desc.add<edm::InputTag>("DigisTrigger", edm::InputTag("hgcalDigis", "HGCalDigiTrigger"));
   desc.add<edm::InputTag>("ECONDPacketInfo", edm::InputTag("hgcalDigis", "")); //UnpackerFlags
   desc.add<edm::InputTag>("MetaData", edm::InputTag("rawMetaDataCollector", ""));
   desc.add<unsigned int>("FEDList", {0});
@@ -164,6 +177,7 @@ void HGCalSysValDigisClient::analyze(const edm::Event& iEvent, const edm::EventS
     return;
   
   analyzeModules(iEvent,iSetup,trigTime);
+  analyzeTriggerModules(iEvent,iSetup,trigTime);
   findModuleSeeds();
 }  
 
@@ -270,6 +284,63 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
     moduleHistos_["seedtoavstrigtime"][key]->Fill(trigTime,digi.toa());    
   }
 
+}
+
+void HGCalSysValDigisClient::analyzeTriggerModules(const edm::Event& iEvent, const edm::EventSetup& iSetup, int trigTime) {
+  const auto& digisTrigger = iEvent.getHandle(digisTriggerTkn_);
+  const auto& digisTrigger_view = digisTrigger->const_view();
+  int32_t ndigisTrigger = digisTrigger_view.metadata().size();
+
+  // TODO: replace with proper mapping
+  moduleIndexerTrigger_.setLayerOffset(1000);
+  moduleIndexerTrigger_.setModOffset(100);
+  moduleIndexerTrigger_.setMaxLayer(10);
+  moduleIndexerTrigger_.setMaxMod(10);
+  moduleIndexerTrigger_.setMaxCh(100);
+
+  //loop to fill histograms
+  for (int32_t i = 0; i < ndigisTrigger; ++i) {
+    
+    auto digiTrigger = digisTrigger_view[i];
+
+    if (digiTrigger.flags() == hgcal::DIGI_FLAG::NotAvailable) continue;
+      
+      //decode digis
+      int algo = static_cast<int>(digiTrigger.algo());
+      int valid = static_cast<int>(digiTrigger.valid());
+      int moduleIdx = static_cast<int>(digiTrigger.moduleIdx());
+      int layer = static_cast<int>(digiTrigger.layer());
+      
+      uint32_t modidx = moduleIndexerTrigger_.getIndexForModuleData(layer, moduleIdx, 0);
+      moduleTriggerHistos_["algo"][modidx]->Fill(algo);
+      moduleTriggerHistos_["valid"][modidx]->Fill(valid);
+      
+      std::vector<int> BXlocations = {
+        static_cast<int>(digiTrigger.BXm3_location()),
+        static_cast<int>(digiTrigger.BXm2_location()),
+        static_cast<int>(digiTrigger.BXm1_location()),
+        static_cast<int>(digiTrigger.BX0_location()),
+        static_cast<int>(digiTrigger.BXp1_location()),
+        static_cast<int>(digiTrigger.BXp2_location()),
+        static_cast<int>(digiTrigger.BXp3_location()),
+      };
+      std::vector<double> BXenergies = {
+        static_cast<double>(digiTrigger.BXm3_energy()),
+        static_cast<double>(digiTrigger.BXm2_energy()),
+        static_cast<double>(digiTrigger.BXm1_energy()),
+        static_cast<double>(digiTrigger.BX0_energy()),
+        static_cast<double>(digiTrigger.BXp1_energy()),
+        static_cast<double>(digiTrigger.BXp2_energy()),
+        static_cast<double>(digiTrigger.BXp3_energy()),
+      };
+      int nominal_BX_location = BXlocations[3];
+      uint32_t chidx = moduleIndexerTrigger_.getIndexForModuleData(layer, moduleIdx, nominal_BX_location);
+
+      for(long unsigned int i = 0; i<BXlist.size(); i++) {
+        moduleTriggerHistos_[BXlist[i]+"_location"][chidx]->Fill(BXlocations[i]);
+        moduleTriggerHistos_[BXlist[i]+"_energy"][chidx]->Fill(BXenergies[i]);
+      }
+  }
 }
 
 //
@@ -477,6 +548,40 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     }
 
   }// end followedModules_ loop
+
+  // Trigger histograms
+  moduleIndexerTrigger_.setLayerOffset(1000);
+  moduleIndexerTrigger_.setModOffset(100);
+  moduleIndexerTrigger_.setMaxLayer(10);
+  moduleIndexerTrigger_.setMaxMod(10);
+  moduleIndexerTrigger_.setMaxCh(100);
+
+  int maxIdx = static_cast<int>(moduleIndexerTrigger_.getMaxIndex());
+  uint32_t layers = 2;
+  uint32_t modids = 3;
+  uint32_t chs = 48;
+  
+  for (uint32_t layer = 0; layer < layers; layer++) {
+    for (uint32_t modid = 0; modid < modids; modid++) {
+      uint32_t modidx = moduleIndexerTrigger_.getIndexForModuleData(layer, modid, 0);
+      std::ostringstream ss;
+      ss << "_layer_" << layer << "_module_" << modid;
+      std::string tag(ss.str());
+      moduleTriggerHistos_["algo"][modidx] = ibook.book1D("algo" + tag, "Algo; Algo; Counts", 10, 0, 10);
+      moduleTriggerHistos_["valid"][modidx] = ibook.book1D("valid" + tag, "valid; valid; Counts", 10, 0, 10);
+      for (uint32_t ch = 0; ch < chs; ch++) {
+        uint32_t chidx = moduleIndexerTrigger_.getIndexForModuleData(layer, modid, ch);
+        std::ostringstream ssCh;
+        ssCh << "_layer_" << layer << "_module_" << modid << "_channel_" << ch;
+        std::string tagCh(ssCh.str());
+        for (unsigned long int i = 0; i < BXlist.size(); i++) {
+          std::string BX = BXlist[i];
+          moduleTriggerHistos_[BX + "_location"][chidx] = ibook.book1D(BX + "_location" + tagCh, BX + "_location; " + BX + "_location; Counts", 50, 0, 50);
+          moduleTriggerHistos_[BX + "_energy"][chidx] = ibook.book1D(BX + "_energy" + tagCh, BX + "_energy; " + BX + "_energy; Counts", 100, 0, 100);
+        }
+      }
+    }
+  }
 
 }
 

@@ -1,0 +1,15 @@
+<lcgdict>
+
+  <!-- Recursive templates implementing the association of indices and layouts, and containing the data -->
+
+  <class name="hgcaldigi::HGCalDigiTriggerSoA"/>
+  <class name="hgcaldigi::HGCalDigiTriggerSoA::View"/>
+  <class name="hgcaldigi::HGCalDigiTriggerHost"/>
+
+  <class name="hgcaldigi::HGCalDigiTriggerSoALayout<128,false>"/>
+  <class name="edm::Wrapper<PortableHostCollection<hgcaldigi::HGCalDigiTriggerSoALayout<128,false> > >" splitLevel="0"/>
+
+  <!-- Recursive templates implementing the association of indices and layouts, and containing the data -->
+  <class name="portablecollection::CollectionLeaf<0, hgcaldigi::HGCalDigiTriggerSoALayout<128, false>>"/>
+
+</lcgdict>

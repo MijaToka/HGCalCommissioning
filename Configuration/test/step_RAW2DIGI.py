@@ -62,13 +62,33 @@ process.rawDataCollector = cms.EDAlias(
   )
 )
 
+process.trgRawDataCollector = cms.EDAlias(
+  source=cms.VPSet(
+    cms.PSet(type=cms.string('TrgFEDRawDataCollection'))
+  )
+)
+
 # RAW -> DIGI producer
-process.load('EventFilter.HGCalRawToDigi.hgcalDigis_cfi')
+# process.load('HGCalCommissioning.HGCalRawToDigiTrigger.hgcalDigis_cfi')
+# process.load('HGCalCommissioning.HGCalRawToDigiTrigger.HGCalRawToDigiTrigger_cfi')
+
+
+process.hgcalDigis = cms.EDProducer(
+  'HGCalRawToDigiTrigger'
+)
 process.hgcalDigis.src = cms.InputTag('rawDataCollector')
+process.hgcalDigis.src_trigger = cms.InputTag('trgRawDataCollector')
+
+# Select which unpacker specialization class to use for the unpacking:
+process.hgcalDigis.unpacking_configuration = cms.string('TBsep24')
+
 process.hgcalDigis.fedIds = cms.vuint32(*eraConfig['fedId'])
 
+process.t = cms.Task(process.hgcalDigis)
+
 process.p = cms.Path(
-    process.hgcalDigis                    # RAW -> DIGI
+    process.t                    # RAW -> DIGI
+    # process.hgcalDigis                    # RAW -> DIGI
 )
 
 process.output = cms.OutputModule(
@@ -77,6 +97,7 @@ process.output = cms.OutputModule(
   outputCommands=cms.untracked.vstring(
     'drop *',
     'keep HGCalTestSystemMetaData_*_*_*',
+    'keep TrgFEDRawDataCollection_*_*_*',
     'keep FEDRawDataCollection_*_*_*',
     'keep *SoA*_hgcalDigis_*_*',
   ),
