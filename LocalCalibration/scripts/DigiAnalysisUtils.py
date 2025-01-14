@@ -76,7 +76,8 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     minirdf = minirdf.Range(1000)
     if len(filter_cond)>0:
         minirdf = minirdf.Filter(filter_cond)
-        
+
+
     obslist = ['adc', 'cm2', 'cm4', 'cmall', 'toa', 'tot']
     obsbounds  = [minirdf.Min(x) for x in obslist]
     obsbounds += [minirdf.Max(x) for x in obslist]

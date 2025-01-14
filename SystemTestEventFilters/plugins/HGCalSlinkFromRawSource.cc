@@ -70,7 +70,7 @@ HGCalSlinkFromRawSource::HGCalSlinkFromRawSource(edm::ParameterSet const& pset, 
   readers_[hgcal::SlinkFileReader::kTrigIdOffset] =
       std::make_shared<hgcal::SlinkFileReader>(trig_inputs, hgcal::SlinkFileReader::kTrigIdOffset);
   trig_num_blocks_ = pset.getUntrackedParameter<unsigned>("trig_num_blocks");
-  trig_scintillator_block_id_ = pset.getUntrackedParameter<unsigned>("trig_scintillator_block_id");
+  trig_scintillator_block_id_ = pset.getUntrackedParameter<int>("trig_scintillator_block_id");
 }
 
 //
@@ -88,7 +88,7 @@ void HGCalSlinkFromRawSource::fillDescriptions(edm::ConfigurationDescriptions& d
   desc.addUntracked<std::vector<std::string>>("inputs")->setComment("list of input files to use for DAQ");
   desc.addUntracked<std::vector<std::string>>("trig_inputs")->setComment("list of input files to use for TRIG");
   desc.addUntracked<unsigned>("trig_num_blocks", 6)->setComment("number of TDAQ blocks in the TRIG link");
-  desc.addUntracked<unsigned>("trig_scintillator_block_id", 5)
+  desc.addUntracked<int>("trig_scintillator_block_id", 5)
       ->setComment("index of the TDAQ block with scintillator TRIG info");
   desc.setAllowAnything();
   edm::EventSkipperByID::fillDescription(desc);

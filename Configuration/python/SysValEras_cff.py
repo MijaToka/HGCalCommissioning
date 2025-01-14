@@ -2,12 +2,15 @@ import FWCore.ParameterSet.Config as cms
 import re
 
 from HGCalCommissioning.Configuration.ErasSepTB2024_cff import Eras_SepTB2024, Calibs_SepTB2024, CustomCalibs_SepTB2024
+from HGCalCommissioning.Configuration.ErasB27_cff import Eras_B27, Calibs_B27, CustomCalibs_B27
 
 _SysValEras = {}
 _SysValEras.update(Eras_SepTB2024)
+_SysValEras.update(Eras_B27)
 
 _SysValCalibs = {}
 _SysValCalibs.update(Calibs_SepTB2024)
+_SysValCalibs.update(Calibs_B27)
 
 
 def findAppropriateCalib(run : int, calib_dict : dict) -> dict:

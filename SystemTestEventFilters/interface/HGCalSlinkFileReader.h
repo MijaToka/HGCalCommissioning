@@ -14,10 +14,14 @@ namespace hgcal {
     SlinkFileReader(const std::vector<std::string> &filelist, unsigned fedId);
 
     const hgcal_slinkfromraw::RecordRunning *nextEvent();
+
+    /**
+       @short if the scintillator block id is <0 then the metadata is filled with trivial information, otherwise the method tries to decode the trigger event
+     */
     void readTriggerData(HGCalTestSystemMetaData &metaData,
                          const hgcal_slinkfromraw::RecordRunning *rTrgEvent,
                          unsigned num_blocks = 6,
-                         unsigned scintillator_block_id = 5);
+                         int scintillator_block_id = 5);
 
     static constexpr unsigned kTrigIdOffset = 10000;
 
