@@ -62,9 +62,14 @@ rule step_RAW2DIGI:
                output={output.root} maxEvents={params.maxEvents}
         #CMSSW appends numEvents to the file name if maxEvents!=-1
         #force the file name to be always the same
-        #targetout={output.root}
-        #localout=${{targetout/.root/*.root}}
-        #mv -v $localout $targetout
+        targetout={output.root}
+        targetmatch=${{targetout/.root/*.root}}
+	localmatches=(`ls $targetmatch`)
+	localout="${{localmatches[0]}}"
+	if [ "$localout" != "$targetout" ]; then
+	   echo "Changing $localout to $targetout"
+	   mv -v $localout $targetout;
+	fi
         """
 
 ##

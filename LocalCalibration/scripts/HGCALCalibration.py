@@ -196,6 +196,14 @@ class HGCALCalibration(ABC):
         for d in rdirlist:
             nano  = f"{d}/*/*/NANO*.root"
             nanos = glob.glob(nano)
+
+            #fall back on old scheme... this should go once run registry is compliant with new scheme
+            if len(nanos)==0:
+                rbasedir, run = re.findall('(.*)/Relay(\d+)', d)[0]
+                nano  = f"{rbasedir}/Relay*/*/*/NANO_{run}_*.root"
+                print(f'[findNANOFrom] fallback search with nano  = {nano} ... this make take longer')
+                nanos += glob.glob(nano)
+                
             nano_versions=[]
             for n in nanos:
                 ndir = os.path.dirname(n)
@@ -239,11 +247,13 @@ class HGCALCalibration(ABC):
             raise IOError(f'Unable to decode runregistry with {runreg_ext} extension')
         
         #get the run
-
-        if len(self.cmdargs.relays)==1:
-          mask = (run_registry['Relay']==self.cmdargs.relay[0]) & (run_registry['RecoValid']==True)
-        else: # for scans with multiple runs
-          mask = (run_registry['Relay'].isin(self.cmdargs.relays)) & (run_registry['RecoValid']==True)
+        try:
+            if len(self.cmdargs.relays)==1:
+                mask = (run_registry['Relay']==self.cmdargs.relay[0]) & (run_registry['RecoValid']==True)
+            else: # for scans with multiple runs
+                mask = (run_registry['Relay'].isin(self.cmdargs.relays)) & (run_registry['RecoValid']==True)
+        except Exception as e:
+            raise ValueError(f'Unable to find  {self.cmdargs.relay} in run registry file {e}')
         if mask.sum()==0:
             raise ValueError(f'Unable to find {self.cmdargs.relay} in run registry file')
 

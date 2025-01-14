@@ -54,7 +54,7 @@ process.source = cms.Source(
     inputs=cms.untracked.vstring(*inputFiles),
     trig_inputs=cms.untracked.vstring(*inputTrigFiles),
     trig_num_blocks=cms.untracked.uint32(eraConfig['trig_num_blocks']),
-    trig_scintillator_block_id=cms.untracked.uint32(eraConfig['trig_scintillator_block'])
+    trig_scintillator_block_id=cms.untracked.int32(eraConfig['trig_scintillator_block'])
 )
 process.rawDataCollector = cms.EDAlias(
   source=cms.VPSet(

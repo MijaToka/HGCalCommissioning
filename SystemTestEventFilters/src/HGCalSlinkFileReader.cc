@@ -74,7 +74,7 @@ const hgcal_slinkfromraw::RecordRunning *SlinkFileReader::nextEvent() {
 void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
                                       const hgcal_slinkfromraw::RecordRunning *rTrgEvent,
                                       unsigned num_blocks,
-                                      unsigned scintillator_block_id) {
+                                      int scintillator_block_id) {
   constexpr uint64_t pkt_mask = 0xff;
   constexpr uint64_t pkt_sep = 0xcafecafe;
 
@@ -101,82 +101,92 @@ void SlinkFileReader::readTriggerData(HGCalTestSystemMetaData &metaData,
     }
     return result;
   };
-
+  
   if (rTrgEvent && rTrgEvent->payloadLength() > 0) {
     metaData.trigType_ = rTrgEvent->slinkBoe()->l1aType();
     metaData.trigSubType_ = rTrgEvent->slinkBoe()->l1aSubType();
     metaData.trigTime_ = 0;
     metaData.trigWidth_ = 0;
 
-    auto p = (const uint64_t *)rTrgEvent;
-    uint32_t length = 0;
-    p += 3;  // (1 record header + 2 slink header)
-    for (unsigned iblock = 0; iblock < num_blocks && p < (const uint64_t *)rTrgEvent + rTrgEvent->payloadLength();
-         ++iblock) {
-      LogDebug("SlinkFileReader") << "Header: " << std::hex << std::setfill('0') << "0x" << *p << std::endl;
-      if ((*p >> 32) != pkt_sep) {
-        throw cms::Exception("CorruptData")
+    if(scintillator_block_id>=0) {
+
+      auto p = (const uint64_t *)rTrgEvent;
+      uint32_t length = 0;
+      p += 3;  // (1 record header + 2 slink header)
+      for (unsigned iblock = 0; iblock < num_blocks && p < (const uint64_t *)rTrgEvent + rTrgEvent->payloadLength();
+	   ++iblock) {
+	LogDebug("SlinkFileReader") << "Header: " << std::hex << std::setfill('0') << "0x" << *p << std::endl;
+	//std::cout << std::dec << iblock << " | " << std::hex << std::setfill('0') << "0x" << *p << std::endl;
+	if ((*p >> 32) != pkt_sep) {
+	  throw cms::Exception("CorruptData")
             << "Expected packet separator: 0x" << std::hex << pkt_sep << " read: 0x" << (*p >> 32) << " Event id: 0x"
             << rTrgEvent->slinkBoe()->eventId() << " Bx id: 0x" << rTrgEvent->slinkEoe()->bxId() << " Orbit id: 0x"
             << rTrgEvent->slinkEoe()->orbitId() << " BOE header: 0x" << rTrgEvent->slinkBoe()->boeHeader();
-      }
-      length = *p & pkt_mask;
-      if (iblock < scintillator_block_id) {
-        //copy from *(p+1) to *(p+length) (i.e. discard the fecafecafe... word) ?
-        //std::cout << std::dec << iblock << std::endl;
-        //for(uint32_t k=1; k<length+1; k++)
-        //  std::cout << "\t 0x" << std::hex << *(p+k) << std::endl;
-      } else if (iblock == scintillator_block_id) {
-        // scintillator
-        // the length should be 7 (BX) * 7 (64b) words
-        // only the LS 32 bits are used
-        // the first word per BX is a header pattern 0xaaaaaaaa, and the 2nd word is a 32-bit counter
-        // only the last (7th) 64b word is used for trig data
-        auto p_scint = p + 7;
-        uint32_t trigtime = 0;
-        uint32_t trigwidth = 0;
-        bool triggered = false;
-        while (p_scint <= p + length) {
-          // Bits [31:  0] : External Trigger
-          // Bits [63: 32] : 0x0
-          // assert((*p_scint >> 32) == 0x0);
-          // if ((*p_scint >> 32) != 0x0) {
-          //   // FIXME
-          //   LogDebug("SlinkFileReader") << "Cannot find pattern (0x0) in the scintillator word: 0x" << std::hex
-          //                               << std::setfill('0') << *p_scint;
-          // }
-          uint32_t trigbits = *p_scint & 0xFFFFFFFF;
-          LogDebug("SlinkFileReader") << "BX " << (p_scint - p) / 7 << ": " << std::hex << std::setfill('0') << "0x"
-                                      << *p_scint << ", trigbits = "
-                                      << "0x" << trigbits << std::endl;
-          if (not triggered) {
-            trigtime += countl_zero(trigbits);
-            if (trigbits > 0) {
-              // first BX with the trigger fired
-              triggered = true;
-              // count the 1s from the right
-              trigwidth += countr_zero(~trigbits);
-            }
-          } else {
-            // trigger already fired in previous BX
-            if (trigbits > 0) {
-              // trigger signal extends more than 1 BX
-              // count the 1s from the left
-              trigwidth += countl_zero(~trigbits);
-            } else if (trigbits == 0) {
-              // stop processing when the trigger is no longer fired
-              break;
-            }
-          }
-          p_scint += 7;
-        }
-        LogDebug("SlinkFileReader") << "==> trigtime = " << std::dec << std::setfill(' ') << trigtime
-                                    << ", trigwidth = " << trigwidth << " scintillator_block_id=" << scintillator_block_id;
-        metaData.trigTime_ = trigtime;
-        metaData.trigWidth_ = trigwidth;
-        break;
-      }
-      p += length + 1;
-    }
-  }
+	}
+	length = *p & pkt_mask;
+	if (iblock < (unsigned) scintillator_block_id) {
+	  //copy from *(p+1) to *(p+length) (i.e. discard the fecafecafe... word) ?
+	  //std::cout << std::dec << iblock << std::endl;
+	  //for(uint32_t k=1; k<length+1; k++)
+	  //  std::cout << "\t 0x" << std::hex << *(p+k) << std::endl;
+	} else if (iblock == (unsigned) scintillator_block_id) {
+	  // scintillator
+	  // the length should be 7 (BX) * 7 (64b) words
+	  // only the LS 32 bits are used
+	  // the first word per BX is a header pattern 0xaaaaaaaa, and the 2nd word is a 32-bit counter
+	  // only the last (7th) 64b word is used for trig data
+	  auto p_scint = p + 7;
+	  uint32_t trigtime = 0;
+	  uint32_t trigwidth = 0;
+	  bool triggered = false;
+	  while (p_scint <= p + length) {
+	    // Bits [31:  0] : External Trigger
+	    // Bits [63: 32] : 0x0
+	    // assert((*p_scint >> 32) == 0x0);
+	    // if ((*p_scint >> 32) != 0x0) {
+	    //   // FIXME
+	    //   LogDebug("SlinkFileReader") << "Cannot find pattern (0x0) in the scintillator word: 0x" << std::hex
+	    //                               << std::setfill('0') << *p_scint;
+	    // }
+	    uint32_t trigbits = *p_scint & 0xFFFFFFFF;
+	    LogDebug("SlinkFileReader") << "BX " << (p_scint - p) / 7 << ": " << std::hex << std::setfill('0') << "0x"
+					<< *p_scint << ", trigbits = "
+					<< "0x" << trigbits << std::endl;
+	    if (not triggered) {
+	      trigtime += countl_zero(trigbits);
+	      if (trigbits > 0) {
+		// first BX with the trigger fired
+		triggered = true;
+		// count the 1s from the right
+		trigwidth += countr_zero(~trigbits);
+	      }
+	    } else {
+	      // trigger already fired in previous BX
+	      if (trigbits > 0) {
+		// trigger signal extends more than 1 BX
+		// count the 1s from the left
+		trigwidth += countl_zero(~trigbits);
+	      } else if (trigbits == 0) {
+		// stop processing when the trigger is no longer fired
+		break;
+	      }
+	    }
+	    p_scint += 7;
+	  }
+	  LogDebug("SlinkFileReader") << "==> trigtime = " << std::dec << std::setfill(' ') << trigtime
+				      << ", trigwidth = " << trigwidth << " scintillator_block_id=" << scintillator_block_id;
+	  metaData.trigTime_ = trigtime;
+	  metaData.trigWidth_ = trigwidth;
+	  break;
+	  
+	}//end scintillator block id
+
+	p += length + 1;
+	
+      }//end loop over trigger blocks
+      
+    }//end if scintillator block id>=0
+
+  }//end trigger event available
+
 }
