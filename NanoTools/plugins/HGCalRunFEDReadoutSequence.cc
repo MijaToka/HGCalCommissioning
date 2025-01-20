@@ -31,7 +31,7 @@
 #include "DataFormats/NanoAOD/interface/FlatTable.h"
 #include "PhysicsTools/NanoAOD/interface/SimpleFlatTableProducer.h"
 #include "CondFormats/DataRecord/interface/HGCalElectronicsMappingRcd.h"
-#include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHostCollection.h"
+#include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
 #include "CondFormats/HGCalObjects/interface/HGCalMappingModuleIndexer.h"
 
 //
@@ -125,7 +125,7 @@ public:
 
 protected:
   std::string tableName_,typeCodeTableName_;
-  edm::ESGetToken<hgcal::HGCalMappingModuleParamHostCollection, HGCalElectronicsMappingRcd> moduleTkn_;
+  edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleTkn_;
   edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIndexTkn_;
 };
 
