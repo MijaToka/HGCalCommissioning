@@ -14,7 +14,7 @@ default:
     - set +u && source /cvmfs/cms.cern.ch/cmsset_default.sh; set -u
     - cmssw-el9 -- cat /etc/redhat-release
     - export SCRAM_ARCH=el9_amd64_gcc12
-    - export MY_CMSSW_REL=CMSSW_15_0_0_pre1
+    - export MY_CMSSW_REL=CMSSW_15_0_X_2025-01-19-2300
 
 compilation-check:
   stage: Compilation check
@@ -25,7 +25,6 @@ compilation-check:
     - cmsrel $MY_CMSSW_REL
     - cd $MY_CMSSW_REL/src/
     - cmsenv
-    - git cms-merge-topic -u CMS-HGCAL:dev/hackathon_base_CMSSW_14_1_X
     - git cms-merge-topic -u ywkao:hgcal-dqm_with_th2poly-13_2_X
     - echo "git clone $CI_MERGE_REQUEST_SOURCE_PROJECT_URL HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
     - git clone $CI_MERGE_REQUEST_SOURCE_PROJECT_URL HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
