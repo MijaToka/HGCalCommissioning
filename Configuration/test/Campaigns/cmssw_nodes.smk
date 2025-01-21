@@ -105,7 +105,8 @@ rule step_DQM:
         dqm = f'DQM_V0001_HGCAL_R{job_dict["run"]}.root'
     input: 
         env = rules.step_SCRAM.output.env,
-        root = rules.step_RECO.output.root
+        root = rules.step_RECO.output.root,
+	rawroot = rules.step_RAW2DIGI.output.root
     output:
         report = "FrameworkJobReport_DQM.xml",
         root = "DQM.root"
@@ -113,7 +114,7 @@ rule step_DQM:
         """
         source {input.env}
         cmsRun -j {output.report} \
-               {params.cfg} run={params.run} era={params.era} files=file:{input.root} maxEvents=-1
+               {params.cfg} run={params.run} era={params.era} files=file:{input.root} secondaryFiles=file:{input.rawroot} maxEvents=-1
         mv {params.dqm} {output.root}
         """
 

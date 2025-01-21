@@ -33,5 +33,3 @@ compilation-check:
     - scram build code-checks
     - scram build code-format
   allow_failure: false
-
-
