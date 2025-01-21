@@ -538,7 +538,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
   moduleIndexerTrigger_.setMaxMod(10);
   moduleIndexerTrigger_.setMaxCh(100);
 
-  int maxIdx = static_cast<int>(moduleIndexerTrigger_.getMaxIndex());
+  //int maxIdx = static_cast<int>(moduleIndexerTrigger_.getMaxIndex());
   uint32_t layers = 2;
   uint32_t modids = 3;
   uint32_t chs = 48;

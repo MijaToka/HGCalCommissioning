@@ -37,7 +37,7 @@ public:
   }
 
   uint32_t getModuleIdx(uint32_t index) {
-    uint32_t layer = index/layerOffset_;
+    //uint32_t layer = index/layerOffset_;
     uint32_t modid = (index%layerOffset_)/modOffset_;
     return modid;
   }
