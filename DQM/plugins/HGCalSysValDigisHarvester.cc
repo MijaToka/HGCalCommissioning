@@ -388,7 +388,7 @@ void HGCalSysValDigisHarvester::dqmTriggerHexaPlots(DQMStore::IBooker &ibooker,
 
           // make a deep copy of the polygon
           auto polygon_ = new TGraph(*polygon);
-          char irot = irotstates_trigger[module];
+          //char irot = irotstates_trigger[module];
           // rotateShape(polygon_,irot);
 
           hexPlots_[typecode][module_energy_path]->addBin(polygon_);
