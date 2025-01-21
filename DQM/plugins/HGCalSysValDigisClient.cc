@@ -137,7 +137,7 @@ HGCalSysValDigisClient::~HGCalSysValDigisClient() { LogDebug("HGCalSysValDigisCl
 //
 void HGCalSysValDigisClient::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
-  desc.add<edm::InputTag>("Raw", edm::InputTag("rawDataCollector"));
+  desc.add<edm::InputTag>("Raw", edm::InputTag("rawDataCollector",""));
   desc.add<edm::InputTag>("Digis", edm::InputTag("hgcalDigis", ""));
   desc.add<edm::InputTag>("DigisTrigger", edm::InputTag("hgcalDigis", "HGCalDigiTrigger"));
   desc.add<edm::InputTag>("ECONDPacketInfo", edm::InputTag("hgcalDigis", "")); //UnpackerFlags
@@ -392,7 +392,12 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
       uint32_t fedid = it.first.first;
       const auto& fed_data = raw_data->FEDData(fedid);
       const uint64_t* header = reinterpret_cast<const uint64_t*>(fed_data.data());
-      crcvalid = hgcal::econdCRCAnalysis(header, econd.location(), econd.payloadLength());
+      try{
+	crcvalid = hgcal::econdCRCAnalysis(header, econd.location(), econd.payloadLength());
+      }catch(std::exception &e){
+	std::cout << e.what() << std::endl;
+	crcvalid = false;
+      }
     }
     
     econdPayload_->Fill(imod,econd.payloadLength());
@@ -410,30 +415,7 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     if (econd.exception()==3) econdQualityH_->Fill(imod, 11); // wrongHeaderMarker
     if (econd.exception()==4) econdQualityH_->Fill(imod, 12); // payloadOverflows
     if (econd.exception()==5) econdQualityH_->Fill(imod, 13); // payloadMismatches
-    if (!crcvalid) econdQualityH_->Fill(imod, 14); // CRCMismatches
-    if (econd.exception()==5 ||
-	htflags>0 ||
-	eboflags>0 ||
-	hgcaldigi::matchFlag(econd.econdFlag())==0 ||
-	hgcaldigi::truncatedFlag(econd.econdFlag()) ||
-	hgcaldigi::expectedFlag(econd.econdFlag())==0 ||
-	hgcaldigi::StatFlag(econd.econdFlag())==1 ||
-	econd.exception()==3 ||
-	econd.exception()==4 ||
-	econd.exception()==5 ) {
-      std::cout << iEvent.run() << " " << iEvent.id() << " | "	
-		<< "ECON#" << imod << " | "
-		<< (htflags>0)
-		<< (eboflags>0)
-		<< (hgcaldigi::matchFlag(econd.econdFlag())==0)
-		<< (hgcaldigi::truncatedFlag(econd.econdFlag()))
-		<< (hgcaldigi::expectedFlag(econd.econdFlag())==0)
-		<< (hgcaldigi::StatFlag(econd.econdFlag())==1)
-		<< (econd.exception()==3)
-		<< (econd.exception()==4)
-		<< (econd.exception()==5) 
-		<< std::endl;
-    }
+    if (!crcvalid) econdQualityH_->Fill(imod, 14); // CRCMismatches    
   }
 
 }
@@ -446,7 +428,7 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
   const auto& moduleInfo = iSetup.getData(moduleInfoTkn_);
 
   //loop over available modules in the system and select the ones to be tracked
-  for(const auto it : moduleIndexer.getTypecodeMap()) {
+  for(const auto &it : moduleIndexer.getTypecodeMap()) {
     uint32_t fedid = it.second.first;
     if(fedList_.size()>0 && std::find(fedList_.begin(), fedList_.end(), fedid) == fedList_.end()) continue;
 
