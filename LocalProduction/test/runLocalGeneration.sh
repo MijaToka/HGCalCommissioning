@@ -1,6 +1,7 @@
 #!/bin/bash
 
-GEOMETRY=Extended2026D99
+#see https://github.com/cms-sw/cmssw/blob/master/Configuration/Geometry/README.md for reference
+GEOMETRY=ExtendedRun4D101
 ERA=Phase2C17I13M9
 CONDITIONS=auto:phase2_realistic_T25
 nevts=1000
