@@ -1,0 +1,35 @@
+{
+    "BIAS_I_PLL_D":{
+	"Type":"CHIPwise",
+	"Path":"Top/0/BIAS_I_PLL_D"
+    },
+    "TOTtoADC":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/MultFactor"
+    },
+    "TOT_P0":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Tot_P0"
+    },
+    "TOT_P1":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Tot_P1"
+    },
+    "TOT_P2":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Tot_P2"
+    },
+    "TOT_P3":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Tot_P3"
+    },
+    "Noise":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Adc_TH",
+	"ReductionMethod":"GetNoiseThreshold"
+    },
+    "ADC_ped":{
+	"Type":"CHANNELwise",
+	"Path":"<CHTYPE>/<CH>/Adc_pedestal"
+    }    
+}
