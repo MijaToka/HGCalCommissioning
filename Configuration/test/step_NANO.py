@@ -8,12 +8,27 @@ options.register('run', None, VarParsing.multiplicity.singleton, VarParsing.varT
                  "run number")
 options.register('skipRecHits', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
                  "skip RecHits table")
+options.register('skipMeta', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "skip metadata table")
+options.register('skipECON', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "skip ECON table")
+options.register('isSimulation', False, VarParsing.multiplicity.singleton, VarParsing.varType.bool,
+                 "adapt for simulated samples")
+options.register('modmap', None, VarParsing.multiplicity.singleton, VarParsing.varType.string,
+                 "use instead this module mapper file")
 options.parseArguments()
 
 print(f'Starting NANO with era={options.era} run={options.run} skipRecHits={options.skipRecHits}')
 
-from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, _ = initSysValCMSProcess(procname='DQM',era=options.era, run=options.run, maxEvents=options.maxEvents)
+if options.isSimulation:
+    from HGCalCommissioning.Configuration.SimulationEras_cff import *
+    process = initSimulationCMSProcess(procname='NANO',maxEvents=options.maxEvents, modulemapper=options.modmap)
+    options.skipRecHits = True
+    options.skipMeta = True
+    options.skipECON = True
+else:    
+    from HGCalCommissioning.Configuration.SysValEras_cff import *
+    process, _ = initSysValCMSProcess(procname='NANO',era=options.era, run=options.run, maxEvents=options.maxEvents, modulemapper=options.modmap)
 
 process.load('SimGeneral.HepPDTESSource.pythiapdt_cfi')
 process.load('Configuration.EventContent.EventContent_cff')
@@ -81,6 +96,8 @@ process.NANOAODoutput = cms.OutputModule("NanoAODOutputModule",
 # Additional output definition
 process.load('HGCalCommissioning.NanoTools.hgcSysValNano_cff')
 process.hgCalNanoTable.skipRecHits = cms.bool(options.skipRecHits)
+process.hgCalNanoTable.skipMeta = cms.bool(options.skipMeta)
+process.hgCalNanoTable.skipECON = cms.bool(options.skipECON)
 process.user_step = cms.Path(process.hgcSysValNanoTask)
 
 # Path and EndPath definitions

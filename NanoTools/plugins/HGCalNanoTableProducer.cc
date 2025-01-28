@@ -47,15 +47,14 @@ public:
         denseIndexInfoTkn_(esConsumes()),
         cellTkn_(esConsumes()),
         moduleTkn_(esConsumes()),
+        skipMeta_(iConfig.getParameter<bool>("skipMeta")),
         skipDigi_(iConfig.getParameter<bool>("skipDigi")),
+        skipECON_(iConfig.getParameter<bool>("skipECON")),
         skipRecHits_(iConfig.getParameter<bool>("skipRecHits")) {
-    produces<nanoaod::FlatTable>("HGCMetaData");        
-    if (!skipDigi_) {
-      produces<nanoaod::FlatTable>("HGCDigi");
-      produces<nanoaod::FlatTable>("HGCECON");
-    }
-    if (!skipRecHits_)
-      produces<nanoaod::FlatTable>("HGCHit");
+    if( !skipMeta_) produces<nanoaod::FlatTable>("HGCMetaData");        
+    if (!skipDigi_) produces<nanoaod::FlatTable>("HGCDigi");
+    if (!skipECON_) produces<nanoaod::FlatTable>("HGCECON");
+    if (!skipRecHits_) produces<nanoaod::FlatTable>("HGCHit");
   }
 
   ~HGCalNanoTableProducer() override {}
@@ -66,8 +65,10 @@ public:
     desc.add<edm::InputTag>("digis", edm::InputTag("hgcalDigis", ""))->setComment("Source of DIGIs SoA");
     desc.add<edm::InputTag>("rechits", edm::InputTag("hgcalRecHits", ""))->setComment("Source of RecHits SoA");
     desc.add<edm::InputTag>("econds", edm::InputTag("hgcalDigis", ""))->setComment("Source of ECOND info SoA");
+    desc.add<bool>("skipMeta", false)->setComment("Does not output Metadata table if enabled");
     desc.add<bool>("skipDigi", false)->setComment("Does not output DIGIs table if enabled");
     desc.add<bool>("skipRecHits", false)->setComment("Does not output RecHits table if enabled");
+    desc.add<bool>("skipECON", false)->setComment("Does not output ECON table if enabled");
     descriptions.addWithDefaultLabel(desc);
   }
 
@@ -98,28 +99,34 @@ private:
     auto const& denseIndexInfo_view = denseIndexInfo.const_view();
     int32_t ndenseIndices = denseIndexInfo_view.metadata().size();
 
-    //fill data for meta data
-    const auto& metaData = iEvent.get(metadataToken_);
-    auto outmetadata = std::make_unique<nanoaod::FlatTable>(1, "HGCMetaData", true); // singleton table
-    outmetadata->setDoc("HGCal meta data");
-    outmetadata->addColumnValue<uint32_t>("trigTime",    metaData.trigTime_,    "trigger time");
-    outmetadata->addColumnValue<uint32_t>("trigWidth",   metaData.trigWidth_,   "trigger width");
-    outmetadata->addColumnValue<uint32_t>("trigType",    metaData.trigType_,    "trigger type");
-    outmetadata->addColumnValue<uint32_t>("trigSubType", metaData.trigSubType_, "trigger subtype");
-    iEvent.put(std::move(outmetadata), "HGCMetaData");
+    //fill data for meta data if available
+    const auto& metaData = iEvent.getHandle(metadataToken_);
+    if(!skipMeta_ && metaData.isValid()) {
+      auto outmetadata = std::make_unique<nanoaod::FlatTable>(1, "HGCMetaData", true); // singleton table
+      outmetadata->setDoc("HGCal meta data");
+      outmetadata->addColumnValue<uint32_t>("trigTime",    metaData->trigTime_,    "trigger time");
+      outmetadata->addColumnValue<uint32_t>("trigWidth",   metaData->trigWidth_,   "trigger width");
+      outmetadata->addColumnValue<uint32_t>("trigType",    metaData->trigType_,    "trigger type");
+      outmetadata->addColumnValue<uint32_t>("trigSubType", metaData->trigSubType_, "trigger subtype");
+      iEvent.put(std::move(outmetadata), "HGCMetaData");
+    }
     
     //retrieve digis and rechits : check if they are valid and consistent with dense indices
-    const auto& digis = iEvent.get(digisToken_);
-    auto const& digis_view = digis.const_view();
-    int32_t ndigis = digis_view.metadata().size();
-    assert(ndigis == ndenseIndices);
-  
+    const auto& digis = iEvent.getHandle(digisToken_);
+    int32_t ndigis = 0;
+    if(!skipDigi_ && digis.isValid()) {
+      ndigis = digis->const_view().metadata().size();
+      assert(ndigis == ndenseIndices);
+    }
+    
     //retrieve rechits and ensure size matches that of dense indices
-    const auto& rechits = iEvent.get(rechitsToken_);
-    auto const& rechits_view = rechits.const_view();
-    int32_t nrechits = rechits_view.metadata().size();
-    assert(nrechits == ndenseIndices);
-
+    const auto& rechits = iEvent.getHandle(rechitsToken_);
+    int32_t nrechits = 0;
+    if(!skipRecHits_ && rechits.isValid()) {
+      nrechits = rechits->const_view().metadata().size();
+      assert(nrechits == ndenseIndices);
+    }
+    
     size_t ngood = 0;
     
     //digi flattable (resize first event)
@@ -153,12 +160,12 @@ private:
       zSide.resize(ndenseIndices);
     }
     
-    for (int32_t i = 0; i < ndigis; i++) {
+    for (int32_t i = 0; i < ndenseIndices; i++) {
       
-      if (digis_view.flags()[i] == hgcal::DIGI_FLAG::NotAvailable) continue;
-
       //fill digis
       if(!skipDigi_) {
+        auto const& digis_view = digis->const_view();
+        if (digis_view.flags()[i] == hgcal::DIGI_FLAG::NotAvailable) continue;
 	tctp[ngood] = digis_view.tctp()[i];
         adc[ngood] = digis_view.adc()[i];
         adcm1[ngood] = digis_view.adcm1()[i];
@@ -181,6 +188,7 @@ private:
       
       //fill rec hits
       if(!skipRecHits_) {
+        auto const& rechits_view = rechits->const_view();
         energy[ngood] = rechits_view.energy()[i];
         time[ngood] = rechits_view.time()[i];
 	rechitflags[ngood] = rechits_view.flags()[i];
@@ -240,8 +248,8 @@ private:
     }
 
     //fill table with ECON-D info
-    if (!skipDigi_) {
-      const auto& econdInfo = iEvent.getHandle(econdInfoTkn_); // ECON-D packet flags
+    const auto& econdInfo = iEvent.getHandle(econdInfoTkn_); // ECON-D packet flags
+    if (!skipECON_ && econdInfo.isValid()) {
       auto const& econdInfo_view = econdInfo->const_view();
       int32_t necons = econdInfo_view.metadata().size();
       std::vector<uint16_t> payloads(necons);
@@ -280,7 +288,7 @@ private:
   edm::ESGetToken<hgcal::HGCalMappingCellParamHost, HGCalElectronicsMappingRcd> cellTkn_;
   edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleTkn_;
 
-  bool skipDigi_, skipRecHits_;
+  bool skipMeta_, skipDigi_, skipECON_, skipRecHits_;
 };
 
 //define this as a plug-in
