@@ -1,4 +1,4 @@
-cmssw       = /afs/cern.ch/user/p/psilva/work/HGCal/TOTIssue/CMSSW_14_1_0_pre1/src
+cmssw       = /afs/cern.ch/user/p/psilva/work/HGCal/Patatrack/CMSSW_15_0_0_pre2/src
 eosdir      = /eos/cms/store/group/dpg_hgcal/comm_hgcal/Production/
 executable  = runLocalGeneration.sh
 arguments   = -c $(cmssw) -m $(mcmfrag) -n $(nevts) -s $(simonly) -o $(transfer_output_files)
@@ -13,5 +13,5 @@ transfer_output_files   = Events_$(ProcId).root
 MY.WantOS   = "el9"
 
 queue 200 dataset mcmfrag nevts simonly from (
-      MinBias_TuneCP5_14TeV-pythia8_CMSSW_14_1_0_pre1_Extended2026D99 EGM-Run3Summer19GS-00020 2500 1
+      MinBias_TuneCP5_14TeV-pythia8_CMSSW_15_0_0_pre3 EGM-Run3Summer19GS-00020 2500 1
 )
