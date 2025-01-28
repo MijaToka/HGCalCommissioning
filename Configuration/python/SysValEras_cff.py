@@ -1,5 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 import re
+from typing import Union
 
 from HGCalCommissioning.Configuration.ErasSepTB2024_cff import Eras_SepTB2024, Calibs_SepTB2024, CustomCalibs_SepTB2024
 from HGCalCommissioning.Configuration.ErasB27_cff import Eras_B27, Calibs_B27, CustomCalibs_B27
@@ -60,7 +61,7 @@ def getEraConfiguration(era : str, run : int) -> dict :
     return cfg
 
 
-def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1) -> (cms.Process, dict):
+def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1, modulemapper : Union[str, None] = None) -> (cms.Process, dict):
     """common declarations for sysval tests: geometry is dummy, it's just the latest"""
 
     eraConfig = getEraConfiguration(era=era, run=run)
@@ -94,7 +95,7 @@ def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int =
     process.load(f"Configuration.Geometry.{geometry}Reco_cff")
     process.load(f"Configuration.Geometry.{geometry}_cff")
     from Geometry.HGCalMapping.hgcalmapping_cff import customise_hgcalmapper
-    process = customise_hgcalmapper(process, modules=eraConfig['modules'])
+    process = customise_hgcalmapper(process, modules=eraConfig['modules'] if modulemapper is None else modulemapper)
 
     # GLOBAL HGCAL CONFIGURATION (for unpacker)
     process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker

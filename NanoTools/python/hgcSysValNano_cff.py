@@ -7,3 +7,4 @@ nanoMetadata = cms.EDProducer("UniqueStringProducer",
 hgcRunFEDReadoutTable = cms.EDProducer("HGCalRunFEDReadoutSequence")
 hgCalNanoTable = cms.EDProducer("HGCalNanoTableProducer")
 hgcSysValNanoTask = cms.Task(nanoMetadata,hgcRunFEDReadoutTable, hgCalNanoTable)
+
