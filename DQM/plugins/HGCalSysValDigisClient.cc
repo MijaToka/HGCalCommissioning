@@ -11,6 +11,7 @@
 #include "DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoSoA.h"
 #include "DataFormats/HGCalDigi/interface/HGCalECONDPacketInfoHost.h"
 #include "DataFormats/HGCalDigi/interface/HGCalRawDataDefinitions.h"
+#include "DataFormats/HGCalRecHit/interface/HGCalRecHitHost.h"
 #include "HGCalCommissioning/HGCalDigiTrigger/interface/HGCalDigiTriggerHost.h"
 
 #include "CondFormats/DataRecord/interface/HGCalDenseIndexInfoRcd.h"
@@ -93,6 +94,7 @@ private:
   const edm::EDGetTokenT<FEDRawDataCollection> fedRawToken_;
   const edm::EDGetTokenT<hgcaldigi::HGCalDigiHost> digisTkn_;
   const edm::EDGetTokenT<hgcaldigi::HGCalDigiTriggerHost> digisTriggerTkn_;
+  const edm::EDGetTokenT<hgcalrechit::HGCalRecHitHost> rechitsTkn_;
   const edm::EDGetTokenT<hgcaldigi::HGCalECONDPacketInfoHost> econdInfoTkn_;
   const edm::EDGetTokenT<HGCalTestSystemMetaData> metaDataTkn_;
   edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIdxTkn_;
@@ -121,6 +123,7 @@ HGCalSysValDigisClient::HGCalSysValDigisClient(const edm::ParameterSet& iConfig)
     : fedRawToken_(consumes<FEDRawDataCollection>(iConfig.getParameter<edm::InputTag>("Raw"))),
       digisTkn_(consumes<hgcaldigi::HGCalDigiHost>(iConfig.getParameter<edm::InputTag>("Digis"))),
       digisTriggerTkn_(consumes<hgcaldigi::HGCalDigiTriggerHost>(iConfig.getParameter<edm::InputTag>("DigisTrigger"))),
+      rechitsTkn_(consumes<hgcalrechit::HGCalRecHitHost>(iConfig.getParameter<edm::InputTag>("RecHits"))),
       econdInfoTkn_(consumes<hgcaldigi::HGCalECONDPacketInfoHost>(iConfig.getParameter<edm::InputTag>("ECONDPacketInfo"))), //FlaggedECONDInfo
       metaDataTkn_(consumes<HGCalTestSystemMetaData>(iConfig.getParameter<edm::InputTag>("MetaData"))),
       moduleIdxTkn_(esConsumes<edm::Transition::BeginRun>()),
@@ -140,6 +143,7 @@ void HGCalSysValDigisClient::fillDescriptions(edm::ConfigurationDescriptions& de
   desc.add<edm::InputTag>("Raw", edm::InputTag("rawDataCollector",""));
   desc.add<edm::InputTag>("Digis", edm::InputTag("hgcalDigis", ""));
   desc.add<edm::InputTag>("DigisTrigger", edm::InputTag("hgcalDigis", "HGCalDigiTrigger"));
+  desc.add<edm::InputTag>("RecHits", edm::InputTag("hgcalRecHits", ""));
   desc.add<edm::InputTag>("ECONDPacketInfo", edm::InputTag("hgcalDigis", "")); //UnpackerFlags
   desc.add<edm::InputTag>("MetaData", edm::InputTag("rawMetaDataCollector", ""));
   desc.add<unsigned int>("FEDList", {0});
@@ -192,6 +196,11 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
   const auto& denseIndexInfo_view = denseIndexInfo.const_view();
   int32_t ndii = denseIndexInfo_view.metadata().size();
   assert( ndigis == ndii );
+
+  //read rechits
+  const auto& rechits = iEvent.getHandle(rechitsTkn_);
+  if (rechits.isValid())
+    assert( rechits->const_view().metadata().size() == ndii );
 
   //loop to fill histograms
   std::map<MonitoredElementKey_t, uint32_t> seedDigiIdx;
@@ -279,9 +288,20 @@ void HGCalSysValDigisClient::analyzeModules(const edm::Event& iEvent, const edm:
     auto digiIdx = it.second;
     auto digi = digis_view[digiIdx];
     moduleHistos_["seedadc"][key]->Fill(digi.adc());
-    moduleHistos_["seedtoa"][key]->Fill(digi.toa());    
+    moduleHistos_["seedtoa"][key]->Fill(digi.toa());
     moduleHistos_["seedadcvstrigtime"][key]->Fill(trigTime,digi.adc());
-    moduleHistos_["seedtoavstrigtime"][key]->Fill(trigTime,digi.toa());    
+    moduleHistos_["seedtoavstrigtime"][key]->Fill(trigTime,digi.toa());
+    //extract rechits
+    if (rechits.isValid()) {
+      const auto& rechit = rechits->const_view()[digiIdx];
+      const auto& energy = rechit.energy();
+      const auto& time = rechit.time();
+      if ( time>0 ) {
+        moduleHistos_["seedtime"][key]->Fill(time);
+        moduleHistos_["seedtimevsenergy"][key]->Fill(energy,time);
+        moduleHistos_["seedtimevstrigtime"][key]->Fill(trigTime,time);
+      }
+    }
   }
 
 }
@@ -521,6 +541,9 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     moduleHistos_["seedtoa"][k] = ibook.book1D("seedtoa" + tag, typecode + ";TOA of channel with max <ADC-ADC_{-1}>; Counts", 100, 0, 1024);
     moduleHistos_["seedtoavstrigtime"][k] = ibook.book2D(
         "seedtoavstrigtime" + tag, typecode + ";trigger phase; TOA of channel with max <ADC-ADC_{-1}>", 200, 0, 200, 100, 0, 1024);
+    moduleHistos_["seedtime"][k] = ibook.book1D("seedtime" + tag, typecode + ";Time of channel with max <ADC-ADC_{-1}> [ps]; RecHits", 100, 0, 25000);
+    moduleHistos_["seedtimevsenergy"][k] = ibook.book2D("seedtimevsenergy" + tag, typecode + ";Energy [ADC]; Time of channel with max <ADC-ADC_{-1}> [ps]", 100, -10, 1000, 100, 0, 25000);
+    moduleHistos_["seedtimevstrigtime"][k] = ibook.book2D("seedtimevstrigtime" + tag, typecode + ";Trigger phase; Time of channel with max <ADC-ADC_{-1}> [ps]", 200, 0, 200, 100, 0, 25000);
     
     //sums will be used bt the harvester
     moduleHistos_["sums"][k] = ibook.book2D("sums" + tag, typecode + ";Channel;", nch, 0, nch, SumIndices_t::LASTINDEX,0,SumIndices_t::LASTINDEX);

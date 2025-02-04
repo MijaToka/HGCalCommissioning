@@ -28,7 +28,9 @@ def getCalibTemplate(nch) :
     'TOT_P0': z,
     'TOT_P1': z,
     'TOT_P2': z,
-    'TOAtops': o,
+    'TOA_CTDC': np.zeros((nch, 32)).tolist(),
+    'TOA_FTDC': np.zeros((nch, 8)).tolist(),
+    'TOA_TW': np.zeros((nch, 3)).tolist(),
     'MIPS_scale': o,
     'Valid': o
   }

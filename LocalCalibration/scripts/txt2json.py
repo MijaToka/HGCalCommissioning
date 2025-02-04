@@ -48,7 +48,9 @@ default_dict = {
   'TOT_P0':      145.0972,
   'TOT_P1':      1.0125,
   'TOT_P2':      0.0037,
-  'TOAtops':     24.41,
+  'TOA_CTDC':    [0.]*32,
+  'TOA_FTDC':    [0.]*8,
+  'TOA_TW':      [0.]*3,
   'MIPS_scale':  1.,
   'Valid':       1, # "integer boolean": 0 or 1
 }
@@ -137,7 +139,7 @@ def txt2json(infname,outfname=None,outdir=None,maxrows=-1,compress=False,verb=0)
   """Convert txt file with calibration parameters to JSON. Basic structure:
   {
     typecode: {
-      parameter: [ values ] # gain-independent (Channel, TOT_*, TOAtops, MIPS_scale)
+      parameter: [ values ] # gain-independent (Channel, TOT_*, TOA_*, MIPS_scale)
       parameter: [   # gain-dependent (ADC_ped, ADCtofC, Noise, CM_slope, CM_ped, BXm1_slope, BXm1_ped)
         [ values ],  # index=0, gain=1, charge= 80 fC
         [ values ],  # index=1, gain=2, charge=160 fC
