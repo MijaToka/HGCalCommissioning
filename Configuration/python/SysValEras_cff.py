@@ -1,4 +1,5 @@
 import FWCore.ParameterSet.Config as cms
+import os
 import re
 from typing import Union
 
@@ -26,7 +27,7 @@ def findAppropriateCalib(run : int, calib_dict : dict) -> dict:
         refrun = available_refs[i]
 
     #print(f'Will use as reference run{run}')
-          
+
     #return calib from reference run
     return refrun, calib_dict[refrun]
 
@@ -35,7 +36,7 @@ def getEraConfiguration(era : str, run : int) -> dict :
     """gets the appropriate configuration to use from the eras dict
     run is used to fine tune the calibration and configurations used
     """
-    
+
     groups=re.findall('(.*)/v(\\d+)',era)
     if len(groups)!=1 or len(groups[0])!=2 :
         raise ValueError(f'Could not decode era {era}')
@@ -53,25 +54,32 @@ def getEraConfiguration(era : str, run : int) -> dict :
         print('No pre-defined reference run: falling back on timestamp based references') 
         refrun, calib = findAppropriateCalib(run=run, calib_dict=_SysValCalibs[setup])
     print(f'Reference run is {refrun}')
-    
+
     cfg = _SysValEras[setup][version].copy()
     cfg.update(calib)
     cfg['ReferenceRun'] = refrun
-    
+
     return cfg
 
 
-def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1, modulemapper : Union[str, None] = None) -> (cms.Process, dict):
-    """common declarations for sysval tests: geometry is dummy, it's just the latest"""
+def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1,
+                         modulemapper : Union[str, None] = None, nthreads : int = 1) -> (cms.Process, dict):
+    """Common declarations for sysval tests: geometry is dummy, it's just the latest"""
 
     eraConfig = getEraConfiguration(era=era, run=run)
 
-    #INIT PROCESS
+    # INIT PROCESS
     from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2
     process = cms.Process(procname,Era_Phase2)
 
-    #MAX EVENTS TO PROCESS
+    # MAX EVENTS TO PROCESS
     process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(maxEvents) )
+
+    # NUMBER OF THREADS & STREAMS
+    if nthreads>=2:
+        #nthread = process.options.numberOfThreads.value() # doesn't work for cmsRun -n X ?
+        process.options.numberOfThreads = cms.untracked.uint32(nthreads)
+        process.options.numberOfStreams = cms.untracked.uint32(0) # if 0: same as nthreads
 
     # GLOBAL TAG
     from Configuration.AlCa.GlobalTag import GlobalTag
@@ -85,8 +93,8 @@ def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int =
     process.load("FWCore.MessageService.MessageLogger_cfi")
     process.MessageLogger.cerr.FwkReport.reportEvery = 50000
 
-    #geometry and indexing
-    import os
+    # GEOMETRY, MAPPING, and INDEXING
+    # TODO: Disable unneeded subdetectors ?
     geometry = "GeometryExtendedRun4D104" # for CMSSW >= 14.2
     geomfile = os.path.join(os.getenv('CMSSW_RELEASE_BASE',"nocmssw"),f"src/Configuration/Geometry/python/{geometry}Reco_cff.py")
     if not os.path.isfile(geomfile):
@@ -95,7 +103,9 @@ def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int =
     process.load(f"Configuration.Geometry.{geometry}Reco_cff")
     process.load(f"Configuration.Geometry.{geometry}_cff")
     from Geometry.HGCalMapping.hgcalmapping_cff import customise_hgcalmapper
-    process = customise_hgcalmapper(process, modules=eraConfig['modules'] if modulemapper is None else modulemapper)
+    if modulemapper is not None:
+        eraConfig['modules'] = modulemapper
+    process = customise_hgcalmapper(process, modules=eraConfig['modules'])
 
     # GLOBAL HGCAL CONFIGURATION (for unpacker)
     process.hgcalConfigESProducer = cms.ESSource( # ESProducer to load configurations for unpacker
@@ -119,24 +129,24 @@ def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int =
         indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
     )
     #sas file in path is used check if file is in eos and transform it with a relative path to CMSSW_BASE
-    modcalib=eraConfig['modcalib']
+    modcalib = eraConfig['modcalib']
     if modcalib.find('/eos/cms')==0:
-        import os
         tkns = f'{os.environ["CMSSW_BASE"]}/src'.split('/')
         relpath = '/'.join( ['..']*len(tkns) )
-        modcalib=relpath+modcalib
+        modcalib = relpath+modcalib
     process.hgcalCalibParamESProducer = cms.ESProducer( # ESProducer to load calibration parameters from JSON file, like pedestals
         'hgcalrechit::HGCalCalibrationESProducer@alpaka',
         filename=cms.FileInPath(modcalib),
         indexSource=cms.ESInputTag('hgCalMappingESProducer',''),
         configSource=cms.ESInputTag('hgcalConfigESProducer', '')
     )
-    
-    # TIMING Report
-    process.Timing = cms.Service("Timing",
-                                 summaryOnly=cms.untracked.bool(True),
-                                 useJobReport=cms.untracked.bool(True))
 
+    # TIMING Report
+    process.Timing = cms.Service(
+        'Timing',
+        summaryOnly=cms.untracked.bool(True),
+        useJobReport=cms.untracked.bool(True)
+    )
 
     return (process, eraConfig)
 
