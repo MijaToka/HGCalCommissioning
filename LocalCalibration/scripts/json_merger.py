@@ -16,7 +16,7 @@ def merge(infnames,outfname="merge.json",verb=0):
   """Convert txt file with calibration parameters to JSON. Basic structure:
   {
     typecode: {
-      parameter: [ values ] # gain-independent (Channel, TOT_*, TOAtops, MIPS_scale)
+      parameter: [ values ] # gain-independent (Channel, TOT_*, TOA_*, MIPS_scale)
       parameter: [   # gain-dependent (ADC_ped, ADCtofC, Noise, CM_slope, CM_ped, BXm1_slope, BXm1_ped)
         [ values ],  # index=0, gain=1, charge= 80 fC
         [ values ],  # index=1, gain=2, charge=160 fC
