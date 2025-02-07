@@ -6,7 +6,7 @@ import os
 import FWCore.ParameterSet.Config as cms
 
 
-def addFastTimerService(process,options,logtag=''):
+def addFastTimerService(process,logtag=''):
   """Add FastTimerService to process."""
   # https://twiki.cern.ch/twiki/bin/viewauth/CMS/FastTimerService
   # HLTrigger/Timer/plugins/FastTimerService.cc
