@@ -20,7 +20,6 @@
 #include "CondFormats/HGCalObjects/interface/HGCalMappingParameterHost.h"
 
 #include "HGCalCommissioning/DQM/interface/HGCalSysValDQMCommon.h"
-#include "HGCalCommissioning/DQM/interface/HGCalECONDPacketAnalysis.h"
 #include "HGCalCommissioning/SystemTestEventFilters/interface/HGCalTestSystemMetaData.h"
 #include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
 
@@ -406,24 +405,14 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     const uint32_t imod = it.second.dqmIndex; // global/dense module index
     const auto econd = econdInfo->const_view()[imod];
 
-    //read rawdata (if available)
-    bool crcvalid(true);
-    if(raw_data.isValid()) {
-      uint32_t fedid = it.first.first;
-      const auto& fed_data = raw_data->FEDData(fedid);
-      const uint64_t* header = reinterpret_cast<const uint64_t*>(fed_data.data());
-      try{
-	crcvalid = hgcal::econdCRCAnalysis(header, econd.location(), econd.payloadLength());
-      }catch(std::exception &e){
-	std::cout << e.what() << std::endl;
-	crcvalid = false;
-      }
-    }
-    
     econdPayload_->Fill(imod,econd.payloadLength());
-    cbQualityH_->Fill(imod,econd.cbFlag());
-    
-    if (econd.cbFlag()) econdQualityH_->Fill(imod, 0);
+    if (!(econd.cbFlag() & 0b1000)){
+	    cbQualityH_->Fill(imod,(econd.cbFlag() & 0b0111));
+    }
+    else{
+	    cbQualityH_->Fill(imod,(econd.cbFlag() & 0b1000));
+    }
+    if (econd.cbFlag() & 0b111) econdQualityH_->Fill(imod, 0);
     auto htflags=hgcaldigi::htFlag(econd.econdFlag());
     auto eboflags=hgcaldigi::eboFlag(econd.econdFlag());
     if (htflags>0) econdQualityH_->Fill(imod, 0 + htflags);
@@ -435,7 +424,6 @@ void HGCalSysValDigisClient::analyzeECONDFlags(const edm::Event& iEvent, const e
     if (econd.exception()==3) econdQualityH_->Fill(imod, 11); // wrongHeaderMarker
     if (econd.exception()==4) econdQualityH_->Fill(imod, 12); // payloadOverflows
     if (econd.exception()==5) econdQualityH_->Fill(imod, 13); // payloadMismatches
-    if (!crcvalid) econdQualityH_->Fill(imod, 14); // CRCMismatches    
   }
 
 }
@@ -494,12 +482,12 @@ void HGCalSysValDigisClient::bookHistograms(DQMStore::IBooker& ibook, edm::Run c
     "H/T good",    "H/T fail",    "H/T amb",
     "E/B/O good",  "E/B/O fail",  "E/B/O amb",
     "Unmatched (M)",   "Trunc (T)", "Unexpected (E)", "Sub-packet error (S)",
-    "Marker", "Payload (OF)", "Payload (mismatch)","CRC (mismatch)"};
+    "Marker", "Payload (OF)", "Payload (mismatch)"};
   size_t necondflags = econdflags.size();
   econdQualityH_ = ibook.book2D("econdQualityH", ";ECON-D;Header quality;", nmods, 0, nmods, necondflags, 0, necondflags);
   for(size_t i=0; i<necondflags; i++) econdQualityH_->setBinLabel(i+1, econdflags[i].c_str(), 2);
 
-  std::vector<std::string> cbflags = {"Normal","Payload","CRC Error","EvID Mis.","FSM T/O","BCID/OrbitID","MB Overflow","Innactive"};
+  std::vector<std::string> cbflags = {"Normal","Payload","CRC Error","EvID Mis.","FSM T/O","BCID/OrbitID","MB Overflow","Innactive","CRC trailer error"};
   size_t ncbflags = cbflags.size();
   cbQualityH_ = ibook.book2D("cbQualityH", ";ECON-D;DAQ quality flags", nmods, 0, nmods, ncbflags, 0, ncbflags);
   for(size_t i=0; i<ncbflags; i++) cbQualityH_->setBinLabel(i+1, cbflags[i].c_str(), 2);
