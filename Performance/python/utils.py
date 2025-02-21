@@ -94,7 +94,7 @@ def scaleFiles(inputFiles,eraConfig,scale=1,verb=0):
     assert inputFiles is None or nfeds==len(inputFiles), "nfeds={nfeds}!={len(inputFiles)}=len(InputFiles)"
     fmax = max(eraConfig['fedId']) # last FED
     eraConfig['fedId'] = [n*(fmax+1)+f for n in range(scale) for f in eraConfig['fedId']]
-    inputFiles = [[f for n in range(scale) for f in inputFiles]] if inputFiles else [[ ]]
+    # inputFiles = [[f for n in range(scale) for f in inputFiles]] if inputFiles else [[ ]]
     #eraConfig['fedId'] = [eraConfig['fedId'][0]+i for i in range(scale)]
     #inputFiles = [scale*inputFiles[0]]
     if verb>=1:

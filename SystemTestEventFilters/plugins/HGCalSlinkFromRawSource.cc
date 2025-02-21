@@ -51,6 +51,7 @@ HGCalSlinkFromRawSource::HGCalSlinkFromRawSource(edm::ParameterSet const& pset, 
         << "Number of inputs (" << inputfiles.size() << ") cannot be devided by the number of fedIds ("
         << fedIds_.size() << ")";
   }
+  n_feds_scale_ = std::max(1U, pset.getUntrackedParameter<unsigned>("n_feds_scale", 1U));
 
   //build the file list to process
   std::vector<std::vector<std::string>> fileLists(fedIds_.size());
@@ -157,7 +158,8 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
   eventPrincipal.put(daqProvenanceHelper_.branchDescription(), std::move(edp), daqProvenanceHelper_.dummyProvenance());
 
   std::unique_ptr<edm::WrapperBase> trgedp(new edm::Wrapper<FEDRawDataCollection>(std::move(trgRawData_)));
-  eventPrincipal.put(trgProvenanceHelper_.branchDescription(), std::move(trgedp), trgProvenanceHelper_.dummyProvenance());
+  eventPrincipal.put(
+      trgProvenanceHelper_.branchDescription(), std::move(trgedp), trgProvenanceHelper_.dummyProvenance());
 
   std::unique_ptr<edm::WrapperBase> emd(new edm::Wrapper<HGCalTestSystemMetaData>(std::move(metaData_)));
   eventPrincipal.put(
@@ -173,7 +175,7 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
   auto copyToFEDRawData =
       [](FEDRawDataCollection& rawData, const hgcal_slinkfromraw::RecordRunning* rEvent, unsigned fedId) {
         using T = FEDRawData::Data::value_type;
-        const auto size = sizeof(uint64_t) / sizeof(T) * (rEvent->payloadLength());        
+        const auto size = sizeof(uint64_t) / sizeof(T) * (rEvent->payloadLength());
         auto& fed_data = rawData.FEDData(fedId);
         fed_data.resize(size);
         memcpy(fed_data.data(), reinterpret_cast<const T*>(rEvent->payload()), size);
@@ -201,13 +203,17 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
           }
         }
         eventRead = true;
-        copyToFEDRawData(*rawData_, rEvent, fedId);
+        for (unsigned icopy = 0; icopy < n_feds_scale_; ++icopy) {
+          copyToFEDRawData(*rawData_, rEvent, icopy * fedIds_.size() + fedId);
+        }
       } else {
         // find the event matched to the first slink
         while (rEvent) {
           if (rEvent->slinkBoe()->eventId() == eventIdVal_ && rEvent->slinkEoe()->bxId() == bxIdVal_ &&
               rEvent->slinkEoe()->orbitId() == orbitIdVal_) {
-            copyToFEDRawData(*rawData_, rEvent, fedId);
+            for (unsigned icopy = 0; icopy < n_feds_scale_; ++icopy) {
+              copyToFEDRawData(*rawData_, rEvent, icopy * fedIds_.size() + fedId);
+            }
             break;
           } else {
             edm::LogError("HGCalSlinkFromRawSource")
@@ -235,26 +241,27 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
 
       if (eventRead) {
         while (rTrgEvent) {
-
-	  // find the trigger event matched to the first DAQ slink
-	  bool evMatches(rTrgEvent->slinkBoe()->eventId() == eventIdVal_);
-	  bool bxMatches(rTrgEvent->slinkEoe()->bxId() == bxIdVal_);
-	  bool orbitMatches(rTrgEvent->slinkEoe()->orbitId() == orbitIdVal_);
-	  metaData_->setTrigBlockFlags((!evMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::EVMISMATCH+
-				       (!bxMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::BXMISMATCH+
-				       (!orbitMatches)*HGCalTestSystemMetaData::TestSystemMetaDataFlags::ORBITMISMATCH);
-	  if(evMatches && bxMatches && orbitMatches) {
+          // find the trigger event matched to the first DAQ slink
+          bool evMatches(rTrgEvent->slinkBoe()->eventId() == eventIdVal_);
+          bool bxMatches(rTrgEvent->slinkEoe()->bxId() == bxIdVal_);
+          bool orbitMatches(rTrgEvent->slinkEoe()->orbitId() == orbitIdVal_);
+          metaData_->setTrigBlockFlags((!evMatches) * HGCalTestSystemMetaData::TestSystemMetaDataFlags::EVMISMATCH +
+                                       (!bxMatches) * HGCalTestSystemMetaData::TestSystemMetaDataFlags::BXMISMATCH +
+                                       (!orbitMatches) *
+                                           HGCalTestSystemMetaData::TestSystemMetaDataFlags::ORBITMISMATCH);
+          if (evMatches && bxMatches && orbitMatches) {
             reader->readTriggerData(*metaData_, rTrgEvent, trig_num_blocks_, trig_scintillator_block_id_);
-	    metaData_->setTrigBlockFlags(HGCalTestSystemMetaData::TestSystemMetaDataFlags::VALID);
+            metaData_->setTrigBlockFlags(HGCalTestSystemMetaData::TestSystemMetaDataFlags::VALID);
             break;
           } else {
-	    LogDebug("SlinkFromRaw")
-	      << "Mismatch in E/B/O counters for the trigger link"
-	      << ": expect eventId=" << eventIdVal_ << ", bxId=" << bxIdVal_ << ", orbitId=" << orbitIdVal_
-	      << ", got eventId = " << rTrgEvent->slinkBoe()->eventId()
-	      << ", bxId = " << rTrgEvent->slinkEoe()->bxId() << ", orbitId=" << rTrgEvent->slinkEoe()->orbitId();
+            LogDebug("SlinkFromRaw") << "Mismatch in E/B/O counters for the trigger link"
+                                     << ": expect eventId=" << eventIdVal_ << ", bxId=" << bxIdVal_
+                                     << ", orbitId=" << orbitIdVal_
+                                     << ", got eventId = " << rTrgEvent->slinkBoe()->eventId()
+                                     << ", bxId = " << rTrgEvent->slinkEoe()->bxId()
+                                     << ", orbitId=" << rTrgEvent->slinkEoe()->orbitId();
             if (rTrgEvent->slinkBoe()->eventId() < eventIdVal_) {
-              rTrgEvent = reader->nextEvent();	      
+              rTrgEvent = reader->nextEvent();
               continue;
             } else {
               break;
@@ -262,8 +269,8 @@ bool HGCalSlinkFromRawSource::updateRunAndEventInfo() {
           }
         }
       }
-    }//end read trigger Slink
-  }//end event read
+    }  //end read trigger Slink
+  }  //end event read
 
   return true;
 }
