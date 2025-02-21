@@ -54,6 +54,8 @@ print(f">>>   nstreams   = {process.options.numberOfStreams}")
 
 # SCALE
 from HGCalCommissioning.Performance.utils import *
+import copy
+origFedIds = copy.deepcopy(eraConfig['fedId'])
 if scale>=2:
   inputFiles = scaleFEDs(process,inputFiles,eraConfig,scale=scale,verb=1)
 
@@ -72,8 +74,9 @@ if not fromFEDRaw: # read binary with HGCalSlinkFromRawSource
       firstLumiSection=cms.untracked.uint32(lumi),
       maxEventsPerLumiSection=cms.untracked.int32(-1),
       useL1EventID=cms.untracked.bool(True),
-      fedIds=cms.untracked.vuint32(*eraConfig['fedId']),
+      fedIds=cms.untracked.vuint32(*origFedIds),
       inputs=cms.untracked.vstring(*inputFiles),
+      n_feds_scale=cms.untracked.uint32(scale),
       trig_inputs=cms.untracked.vstring(*inputTrigFiles),
       trig_num_blocks=cms.untracked.uint32(eraConfig['trig_num_blocks']),
       trig_scintillator_block_id=cms.untracked.int32(eraConfig['trig_scintillator_block'])

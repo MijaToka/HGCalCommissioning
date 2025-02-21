@@ -55,6 +55,7 @@ private:
   uint64_t nEventsRead_;
   bool useL1EventID_;
   std::vector<unsigned> fedIds_;
+  unsigned n_feds_scale_;
   unsigned trig_num_blocks_;
   int trig_scintillator_block_id_;
 
