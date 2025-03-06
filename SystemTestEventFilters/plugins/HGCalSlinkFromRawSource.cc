@@ -155,15 +155,15 @@ void HGCalSlinkFromRawSource::read(edm::EventPrincipal& eventPrincipal) {
   makeEvent(eventPrincipal, aux);
 
   std::unique_ptr<edm::WrapperBase> edp(new edm::Wrapper<FEDRawDataCollection>(std::move(rawData_)));
-  eventPrincipal.put(daqProvenanceHelper_.branchDescription(), std::move(edp), daqProvenanceHelper_.dummyProvenance());
+  eventPrincipal.put(daqProvenanceHelper_.productDescription(), std::move(edp), daqProvenanceHelper_.dummyProvenance());
 
   std::unique_ptr<edm::WrapperBase> trgedp(new edm::Wrapper<FEDRawDataCollection>(std::move(trgRawData_)));
   eventPrincipal.put(
-      trgProvenanceHelper_.branchDescription(), std::move(trgedp), trgProvenanceHelper_.dummyProvenance());
+      trgProvenanceHelper_.productDescription(), std::move(trgedp), trgProvenanceHelper_.dummyProvenance());
 
   std::unique_ptr<edm::WrapperBase> emd(new edm::Wrapper<HGCalTestSystemMetaData>(std::move(metaData_)));
   eventPrincipal.put(
-      metadataProvenanceHelper_.branchDescription(), std::move(emd), metadataProvenanceHelper_.dummyProvenance());
+      metadataProvenanceHelper_.productDescription(), std::move(emd), metadataProvenanceHelper_.dummyProvenance());
 }
 
 //

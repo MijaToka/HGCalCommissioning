@@ -18,13 +18,12 @@ class HGCalTrgDataProvenanceHelper {
 public:
   
   HGCalTrgDataProvenanceHelper(edm::TypeID const& metaDataType)
-    : branchDesc_(makeDescription(metaDataType,"FEDRawDataCollection", "FEDRawDataCollection", "HGCalSlinkFromRawSource")),
+    : constProductDescription_(makeDescription(metaDataType,"FEDRawDataCollection", "FEDRawDataCollection", "HGCalSlinkFromRawSource")),
       processParameterSet_() {
-    dummyProvenance_=edm::ProductProvenance(branchDesc_.branchID());
+    dummyProvenance_=edm::ProductProvenance(constProductDescription_.branchID());
 
-    std::string const& moduleLabel = branchDesc_.moduleLabel();
-    std::string const& processName = branchDesc_.processName();
-    std::string const& moduleName = branchDesc_.moduleName();
+    std::string const& moduleLabel = constProductDescription_.moduleLabel();
+    std::string const& processName = constProductDescription_.processName();
     typedef std::vector<std::string> vstring;
     vstring empty;
 
@@ -40,7 +39,6 @@ public:
     edm::ParameterSet pseudoInput;
     pseudoInput.addParameter<std::string>("@module_edm_type", "Source");
     pseudoInput.addParameter<std::string>("@module_label", moduleLabel);
-    pseudoInput.addParameter<std::string>("@module_type", moduleName);
     processParameterSet_.addParameter<edm::ParameterSet>(moduleLabel, pseudoInput);
 
     processParameterSet_.addParameter<vstring>("@all_esmodules", empty);
@@ -54,28 +52,28 @@ public:
     processParameterSet_.registerIt();
   }
   
-  inline static edm::BranchDescription makeDescription(edm::TypeID const& rawDataType,std::string const& collectionName,std::string const& friendlyName,std::string const& sourceLabel) {
-    edm::BranchDescription desc(edm::InEvent, "trgRawDataCollector", "LHC", collectionName, friendlyName, "", sourceLabel, edm::ParameterSetID(), edm::TypeWithDict(rawDataType.typeInfo()),false);
+  inline static edm::ProductDescription makeDescription(edm::TypeID const& rawDataType,std::string const& collectionName,std::string const& friendlyName,std::string const& sourceLabel) {
+    edm::ProductDescription desc(edm::InEvent, "trgRawDataCollector", "LHC", collectionName, friendlyName, "", edm::TypeWithDict(rawDataType.typeInfo()), false);
     desc.setIsProvenanceSetOnRead(); 
     return desc;
   }
   
   inline edm::ProductProvenance const& dummyProvenance() const { return dummyProvenance_; }
-  
-  inline edm::BranchDescription const& branchDescription() const { return branchDesc_; }
+
+  inline edm::ProductDescription const& productDescription() const { return constProductDescription_; }
   
   inline edm::ProcessHistoryID init(edm::ProductRegistry& productRegistry, edm::ProcessHistoryRegistry& processHistoryRegistry) const {
 
-    productRegistry.copyProduct(branchDesc_);
+    productRegistry.copyProduct(constProductDescription_);
     
     edm::ProcessHistory ph;
-    ph.emplace_back(branchDesc_.processName(), processParameterSet_.id(), edm::getReleaseVersion(), edm::getPassID());
+    ph.emplace_back(constProductDescription_.processName(), processParameterSet_.id(), edm::getReleaseVersion(), edm::getPassID());
     processHistoryRegistry.registerProcessHistory(ph);
     return ph.id();
   }
   
 private:
-  edm::BranchDescription const branchDesc_;
+  edm::ProductDescription const constProductDescription_;
   edm::ProductProvenance dummyProvenance_;
   edm::ParameterSet processParameterSet_;
 };
