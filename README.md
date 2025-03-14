@@ -1,4 +1,4 @@
-# HGCAL commissioning tools
+# HGCAL commissioning tools [![pipeline status](https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/badges/master/pipeline.svg)](https://gitlab.cern.ch/hgcal-dpg/hgcal-comm/-/commits/master) [![documentation](https://img.shields.io/badge/docs-hgcaldocs-success)](https://hgcaldocs.web.cern.ch/RawDataHandling/intro/)
 
 This repository holds CMSSW-based tools for HGCAL commissioning using CMSSW >=14x.
 
