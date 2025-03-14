@@ -67,7 +67,8 @@ public:
     productRegistry.copyProduct(constProductDescription_);
     
     edm::ProcessHistory ph;
-    ph.emplace_back(constProductDescription_.processName(), processParameterSet_.id(), edm::getReleaseVersion(), edm::getPassID());
+    edm::HardwareResourcesDescription hwdesc;
+    ph.emplace_back(constProductDescription_.processName(), processParameterSet_.id(), edm::getReleaseVersion(), hwdesc);
     processHistoryRegistry.registerProcessHistory(ph);
     return ph.id();
   }

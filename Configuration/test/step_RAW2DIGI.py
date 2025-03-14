@@ -11,6 +11,8 @@ options.register('era', None, VarParsing.multiplicity.singleton, VarParsing.varT
                  "reconstruction era")
 options.register('inputTrigFiles',[],
                  VarParsing.multiplicity.list, VarParsing.varType.string, "input Trigger link file")
+options.register('enableTPGunpacker', False,
+                 VarParsing.multiplicity.singleton, VarParsing.varType.bool, "unpack also TPGs")
 options.register('yamls',None,
                  VarParsing.multiplicity.singleton, VarParsing.varType.string, "input Trigger link file")
 options.parseArguments()
@@ -54,41 +56,38 @@ process.source = cms.Source(
     inputs=cms.untracked.vstring(*inputFiles),
     trig_inputs=cms.untracked.vstring(*inputTrigFiles),
     trig_num_blocks=cms.untracked.uint32(eraConfig['trig_num_blocks']),
-    trig_scintillator_block_id=cms.untracked.int32(eraConfig['trig_scintillator_block'])
+    trig_scintillator_block_id=cms.untracked.int32(eraConfig['trig_scintillator_block'])    
 )
+
 process.rawDataCollector = cms.EDAlias(
   source=cms.VPSet(
     cms.PSet(type=cms.string('FEDRawDataCollection'))
   )
 )
 
-process.trgRawDataCollector = cms.EDAlias(
-  source=cms.VPSet(
-    cms.PSet(type=cms.string('TrgFEDRawDataCollection'))
-  )
-)
+#start the RAW2DIGI producer
+if options.enableTPGunpacker:
+    process.trgRawDataCollector = cms.EDAlias(
+        source=cms.VPSet(
+            cms.PSet(type=cms.string('TrgFEDRawDataCollection'))
+        )
+    )
 
-# RAW -> DIGI producer
-# process.load('HGCalCommissioning.HGCalRawToDigiTrigger.hgcalDigis_cfi')
-# process.load('HGCalCommissioning.HGCalRawToDigiTrigger.HGCalRawToDigiTrigger_cfi')
+    process.hgcalDigis = cms.EDProducer('HGCalRawToDigiTrigger')
+    process.hgcalDigis.src_trigger = cms.InputTag('trgRawDataCollector')
+
+else:
+    process.hgcalDigis = cms.EDProducer('HGCalRawToDigi')
 
 
-process.hgcalDigis = cms.EDProducer(
-  'HGCalRawToDigiTrigger'
-)
+#final configuration of digi producer
 process.hgcalDigis.src = cms.InputTag('rawDataCollector')
-process.hgcalDigis.src_trigger = cms.InputTag('trgRawDataCollector')
-
-# Select which unpacker specialization class to use for the unpacking:
-process.hgcalDigis.unpacking_configuration = cms.string('TBsep24')
-
 process.hgcalDigis.fedIds = cms.vuint32(*eraConfig['fedId'])
-
+    
 process.t = cms.Task(process.hgcalDigis)
 
 process.p = cms.Path(
     process.t                    # RAW -> DIGI
-    # process.hgcalDigis                    # RAW -> DIGI
 )
 
 process.output = cms.OutputModule(
@@ -97,10 +96,13 @@ process.output = cms.OutputModule(
   outputCommands=cms.untracked.vstring(
     'drop *',
     'keep HGCalTestSystemMetaData_*_*_*',
-    'keep TrgFEDRawDataCollection_*_*_*',
     'keep FEDRawDataCollection_*_*_*',
     'keep *SoA*_hgcalDigis_*_*',
   ),
   SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
 )
+
+if options.enableTPGunpacker:
+    process.output.outputCommands.extend( ['keep TrgFEDRawDataCollection_*_*_*'] )
+
 process.outpath = cms.EndPath(process.output)
