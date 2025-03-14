@@ -1,11 +1,32 @@
 image: gitlab-registry.cern.ch/cms-cloud/cmssw-docker/al9-cms
 
+include:
+  - project: 'ci-tools/container-image-ci-templates'
+    file: 'kaniko-image.gitlab-ci.yml'
+
 stages:
 - Compilation check
+- Build docker
 
-default:
+variables:
+  CONTEXT_DIR: ""
+  DOCKER_FILE_NAME: "Dockerfile"
+  GIT_SUBMODULE_STRATEGY: recursive
+  PUSH_IMAGE: "true"
+  ACCELERATED_IMAGE: "false"
+  BUILD_ARGS: ""
+  SCAN_IMAGE: "false"
+  REGISTRY_IMAGE_PATH: ${CI_REGISTRY_IMAGE}
+  CMS_PATH: /cvmfs/cms.cern.ch
+  CMSSW_RELEASE: CMSSW_15_1_0_pre1
+  SCRAM_ARCH: el9_amd64_gcc12
+
+compilation-check:
+  stage: Compilation check
+  only: 
+    - merge_requests
   tags:
-  - cvmfs
+    - cvmfs
   before_script:
     - git config --global user.email "hgcalrd@cern.ch"
     - git config --global user.name "HGCAL Raw Data"
@@ -13,17 +34,10 @@ default:
     - shopt -s expand_aliases
     - set +u && source /cvmfs/cms.cern.ch/cmsset_default.sh; set -u
     - cmssw-el9 -- cat /etc/redhat-release
-    - export SCRAM_ARCH=el9_amd64_gcc12
-    - export MY_CMSSW_REL=CMSSW_15_1_0_pre1
-
-compilation-check:
-  stage: Compilation check
-  only: 
-  - merge_requests
   script:
     - echo "Testing branch $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
-    - cmsrel $MY_CMSSW_REL
-    - cd $MY_CMSSW_REL/src/
+    - cmsrel ${CMSSW_RELEASE}
+    - cd ${CMSSW_RELEASE}/src/
     - cmsenv
     - git cms-init
     - echo "git clone $CI_MERGE_REQUEST_SOURCE_PROJECT_URL HGCalCommissioning -b $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
@@ -33,3 +47,11 @@ compilation-check:
     - scram build code-checks
     - scram build code-format
   allow_failure: false
+
+cmssw-image:
+  extends: .build_kaniko
+  only: 
+    - master
+  stage: Build docker
+  tags:
+    - cvmfs
