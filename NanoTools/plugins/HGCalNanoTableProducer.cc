@@ -7,7 +7,7 @@
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/stream/EDProducer.h"
-#include "FWCore/Utilities/interface/Span.h"
+#include <span>
 
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
@@ -76,14 +76,14 @@ private:
 
   //digi table columns
   std::vector<uint16_t> tctp, adc, adcm1, tot, toa, cm, flags, channel, fedId, fedReadoutSeq;
+  std::vector<uint8_t> isSiPM;
   std::vector<int> chI1, chI2, modI1, modI2, chType;
-  std::vector<bool> isSiPM;
 
   //rec hit table columns
   std::vector<float> energy,time,x,y;
   std::vector<int> layer;
   std::vector<uint16_t> rechitflags;
-  std::vector<bool> zSide;
+  std::vector<int16_t> zSide; 
   
   void beginStream(edm::StreamID) override{};
 
@@ -181,7 +181,7 @@ private:
         chI1[ngood] = cellInfo_view.i1()[cellInfoIdx];
         chI2[ngood] = cellInfo_view.i2()[cellInfoIdx];
         uint32_t modInfoIdx(denseIndexInfo_view.modInfoIdx()[i]);
-	isSiPM[ngood] = moduleInfo_view.isSiPM()[modInfoIdx];
+	isSiPM[ngood] = (uint8_t) moduleInfo_view.isSiPM()[modInfoIdx];
         modI1[ngood] = moduleInfo_view.i1()[modInfoIdx];
         modI2[ngood] = moduleInfo_view.i2()[modInfoIdx];
       }
@@ -196,18 +196,18 @@ private:
         y[ngood] = denseIndexInfo_view.y()[i];
         HGCalDetId detId(denseIndexInfo_view.detid()[i]);
         layer[ngood] = detId.layer();
-        zSide[ngood] = detId.zside();
+        zSide[ngood] = (int16_t) detId.zside();
       }
 
       ngood++;
     }
 
     //wrap up the procedure of instatiating a span to copy only ngood values to a FlatTable
-    //note in c++20 can use std::span instead
+    //moved to std::span. New note: probably not needed any longer?
     auto addcol = []<typename T>(std::unique_ptr<nanoaod::FlatTable> &table, size_t n, const std::string &name, std::vector<T> &valvec, const std::string &docString)
       {
-	edm::Span valvec_span(valvec.begin(),valvec.begin()+n);
-	table->template addColumn<T>(name,valvec_span,docString);
+        std::span<T> valvec_span(valvec.begin(),valvec.begin()+n);
+        table->template addColumn<T>(name,valvec_span,docString);
       };
 
     //finalize digis table

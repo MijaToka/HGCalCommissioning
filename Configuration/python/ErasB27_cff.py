@@ -5,8 +5,17 @@ Eras_B27 = {
         '1': {
             'fedId':[0],
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_Sep2024TBv1.txt',
-            'fedconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/Calibrations/SepTB2024/config/config_feds_v1.json',
-            'modconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/Calibrations/SepTB2024/config/config_econds_v1.json',
+            'fedconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/SepTB2024/config/config_feds_v1.json',
+            'modconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/SepTB2024/config/config_econds_v1.json',
+            'modcalib':None,
+            'trig_scintillator_block':-1,
+            'trig_num_blocks':6
+        },
+        '2': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_B27v1.txt',
+            'fedconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_feds_v1.json',
+            'modconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_econds_v1.json',
             'modcalib':None,
             'trig_scintillator_block':-1,
             'trig_num_blocks':6
@@ -17,7 +26,7 @@ Eras_B27 = {
 Calibs_B27 = {
     'B27': {
         1726941148 : {
-            "modcalib": "/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/Calibrations/SepTB2024/level0_calib_Relay1726941148.json",
+            "modcalib": "/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/SepTB2024/level0_calib_Relay1726941148.json",
         }
     }
 }

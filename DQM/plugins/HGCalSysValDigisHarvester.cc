@@ -85,6 +85,9 @@ private:
   //location of the hex map templates
   std::string templateDir_;
 
+  //skip trigger plots
+  bool skipTriggerHarvesting_;
+
   //module indexer / info
   edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIdxTkn_;
   edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleInfoTkn_;
@@ -103,6 +106,7 @@ private:
 //
 HGCalSysValDigisHarvester::HGCalSysValDigisHarvester(const edm::ParameterSet &iConfig)
   : templateDir_(iConfig.getParameter<std::string>("TemplateFiles")),
+    skipTriggerHarvesting_(iConfig.getParameter<bool>("SkipTriggerHarvesting")),
     moduleIdxTkn_(esConsumes<edm::Transition::EndLuminosityBlock>()),
     moduleInfoTkn_(esConsumes<edm::Transition::EndLuminosityBlock>())
 {
@@ -113,6 +117,7 @@ HGCalSysValDigisHarvester::HGCalSysValDigisHarvester(const edm::ParameterSet &iC
 void HGCalSysValDigisHarvester::fillDescriptions(edm::ConfigurationDescriptions &descriptions) {
   edm::ParameterSetDescription desc;
   desc.add<std::string>("TemplateFiles","HGCalCommissioning/DQM/data");
+  desc.add<bool>("SkipTriggerHarvesting",true);
   descriptions.addWithDefaultLabel(desc);
 }
 
@@ -128,7 +133,8 @@ void HGCalSysValDigisHarvester::dqmEndLuminosityBlock(DQMStore::IBooker &ibooker
                                                       edm::LuminosityBlock const &iLumi,
                                                       edm::EventSetup const &iSetup) {
    dqmDAQHexaPlots(ibooker, igetter, iLumi, iSetup);
-   dqmTriggerHexaPlots(ibooker, igetter, iLumi, iSetup); 
+   if(!skipTriggerHarvesting_)
+     dqmTriggerHexaPlots(ibooker, igetter, iLumi, iSetup); 
 }
 
 
