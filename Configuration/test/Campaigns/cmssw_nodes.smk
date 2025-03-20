@@ -158,6 +158,24 @@ rule step_DQM_upload:
 ##
 ## NANO WORKFLOW
 ##	
+rule step_DIGI2NANO:
+    params:
+        era = f'{job_dict["era"]}',
+        run = f'{job_dict["run"]}',
+        cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_NANO.py"
+    input: 
+        env = rules.step_SCRAM.output.env,
+        root = rules.step_RAW2DIGI.output.root
+    output:
+        report = "FrameworkJobReport_NANO.xml",
+        root = "NANO.root"
+    shell: 
+        """
+        source {input.env}
+        cmsRun -j {output.report} \
+               {params.cfg} era={params.era} run={params.run} files=file:{input.root} skipRecHits=true maxEvents=-1
+        """
+
 rule step_NANO:
     params:
         era = f'{job_dict["era"]}',

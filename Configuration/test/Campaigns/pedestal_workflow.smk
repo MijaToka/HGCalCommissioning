@@ -10,9 +10,8 @@ rule step_JOBREPORT:
         cfgurl = cfgurl
     input: 
         rules.step_RAW2DIGI.output.report,
-        rules.step_RECO.output.report,
-        rules.step_DQM.output.report,
-        rules.step_NANO.output.report,
+        rules.step_DIGI2DQM.output.report,
+        rules.step_DIGI2NANO.output.report,
         env = rules.step_SCRAM.output.env,
     output:
         report = "jobreport.json"
@@ -25,9 +24,8 @@ rule step_JOBREPORT:
 
 rule step_STORE:
     input :
-        rules.step_DQM.output,
-        rules.step_RECO.output,           
-        rules.step_NANO.output,
+        rules.step_DIGI2DQM.output,
+        rules.step_DIGI2NANO.output,
         rules.step_JOBREPORT.output
     params:
         mycopy = "cp -v" if job_dict["output"].find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
@@ -43,9 +41,8 @@ rule step_STORE:
         #prepare output
 
         #ROOT files
-        {params.mycopy} {rules.step_DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {log}
-        {params.mycopy} {rules.step_RECO.output.root} {params.outdir}/RECO_{params.tag}.root >> {log}
-        {params.mycopy} {rules.step_NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {log}	
+        {params.mycopy} {rules.step_DIGI2DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {log}
+        {params.mycopy} {rules.step_DIGI2NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {log}	
 
         #Report
         {params.mycopy} {rules.step_JOBREPORT.output.report} {params.outdir}/reports/job_{params.tag}.json >> {log}
@@ -72,7 +69,7 @@ rule step_CALIBRATION:
         #
 	echo "Running pedestals and pedestals closure" > {log}
         python3 scripts/HGCALPedestals.py -r {relay} -i {outbasedir} -o {calibdir} --forceRewrite
-        python3 scripts/HGCALPedestalsClosure.py -r {relay} -i {outbasedir} -o {calibdir} --forceRewrite
+        #python3 scripts/HGCALPedestalsClosure.py -r {relay} -i {outbasedir} -o {calibdir} --forceRewrite
                 
         #
         # CMSSW L0 calib file
@@ -101,9 +98,8 @@ rule all:
     input:
         rules.step_SCRAM.output,
         rules.step_RAW2DIGI.output,
-        rules.step_RECO.output,
-        rules.step_DQM.output,
-        rules.step_NANO.output,
+        rules.step_DIGI2DQM.output,
+        rules.step_DIGI2NANO.output,
         rules.step_JOBREPORT.output,
         rules.step_STORE.log,
         rules.step_CALIBRATION.log
