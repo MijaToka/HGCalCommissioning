@@ -72,6 +72,47 @@ rule step_RECO:
 ##
 ## DQM WORKFLOWS
 ##
+rule step_DIGI2DQM:
+    params:
+        run = f'{job_dict["run"]}',
+        era = f'{job_dict["era"]}',
+        cfg = "$CMSSW_BASE/src/HGCalCommissioning/Configuration/test/step_DQM.py",
+        dqm = f'DQM_V0001_HGCAL_R{job_dict["run"]}.root'
+    input: 
+        env = rules.step_SCRAM.output.env,
+        rawroot = rules.step_RAW2DIGI.output.root
+    output:
+        report = "FrameworkJobReport_DQM.xml",
+        root = "DQM.root"
+    shell: 
+        """
+        source {input.env}
+        cmsRun -j {output.report} \
+               {params.cfg} run={params.run} era={params.era} files=file:{input.rawroot} maxEvents=-1
+        mv {params.dqm} {output.root}
+        """
+
+rule step_DIGI2DQM_upload:
+    params:
+        run = f'{job_dict["run"]}',
+        dqmtag = f'V{job_dict["lumisection"]:04d}_HGCAL_R{job_dict["run"]:09d}',
+        dqmuploadtag = f'V0001_HGCAL_R{job_dict["run"]:09d}',
+        dqmserver = job_dict['dqmserver'] if 'dqmserver' in job_dict else "http://hgc-vm-2024.cern.ch:8070/dqm/online-dev"
+    input:
+        env = rules.step_SCRAM.output.env,
+        root = rules.step_DIGI2DQM.output.root
+    log:
+        "digi2dqmupload.done"
+    shell: 
+        """
+        source {input.env}
+        cp -v {input.root} DQM_{params.dqmtag}.root > {log}
+        cp -v {input.root} DQM_{params.dqmuploadtag}.root >> {log}
+	visDQMUpload.py {params.dqmserver} DQM_{params.dqmuploadtag}.root > {log}
+	rm -v DQM_{params.dqmuploadtag}.root >> {log}
+        """
+
+
 rule step_DQM:
     params:
         run = f'{job_dict["run"]}',
