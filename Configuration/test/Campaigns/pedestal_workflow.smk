@@ -11,6 +11,7 @@ rule step_JOBREPORT:
     input: 
         rules.step_RAW2DIGI.output.report,
         rules.step_DIGI2DQM.output.report,
+        rules.step_DIGI2DQM_upload.log,
         rules.step_DIGI2NANO.output.report,
         env = rules.step_SCRAM.output.env,
     output:
@@ -99,6 +100,7 @@ rule all:
         rules.step_SCRAM.output,
         rules.step_RAW2DIGI.output,
         rules.step_DIGI2DQM.output,
+        rules.step_DIGI2DQM_upload.log,
         rules.step_DIGI2NANO.output,
         rules.step_JOBREPORT.output,
         rules.step_STORE.log,
