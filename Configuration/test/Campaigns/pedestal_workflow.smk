@@ -53,7 +53,7 @@ rule step_STORE:
 rule step_CALIBRATION:
     params:
         pedfile = f"{calibdir}/Relay{relay}/pedestals.json",
-        econdcmnargs = f'-i {calibdir}/Relay{relay}/pedestals.json --cmType 2 --mipSF 0'
+        econdcmnargs = f'-i {calibdir}/Relay{relay}/pedestals.json --mipSF 0'
     input:
         env = rules.step_SCRAM.output.env,
         upload = rules.step_STORE.log
