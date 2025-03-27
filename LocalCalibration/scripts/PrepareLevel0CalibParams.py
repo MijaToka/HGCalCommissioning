@@ -38,7 +38,7 @@ def getCalibTemplate(nch) :
   return calib_templ_dict
 
 
-def buildLevel0CalibParams(input_json : dict, cm : str) -> dict:
+def buildLevel0CalibParams(input_json : dict) -> dict:
   
   #load data to merge
   data : dict = {}
@@ -56,6 +56,10 @@ def buildLevel0CalibParams(input_json : dict, cm : str) -> dict:
     for m,mdata in data['ped'].items():    
       nch = len(mdata['Channel'])
       typecode=m.replace('_','-')
+      if "MH" in typecode:
+          cm = "4"
+      elif "ML" in typecode:
+          cm = "2"
       level0_calib[typecode] = getCalibTemplate(nch)
       level0_calib[typecode]['Channel'] = mdata['Channel'].copy()
       level0_calib[typecode]['Valid'] = mdata['Valid'].copy()
@@ -63,7 +67,6 @@ def buildLevel0CalibParams(input_json : dict, cm : str) -> dict:
       level0_calib[typecode]['Noise'] = mdata['ADC_rms'].copy()
       level0_calib[typecode]['CM_ped'] = mdata[f'cm{cm}_ped'].copy()
       level0_calib[typecode]['CM_slope'] = mdata[f'cm{cm}_slope'].copy()
-
   #add the calpulse results also
   if 'calpulse' in data:
     
@@ -91,7 +94,6 @@ def buildLevel0CalibParams(input_json : dict, cm : str) -> dict:
       level0_calib[typecode]['TOT_P2'] = (a / k).tolist()
       level0_calib[typecode]['TOT_P1'] = ((ktot -2*a*x0) / k).tolist()
       level0_calib[typecode]['TOT_P0'] = ((a*x0*x0-ktot*ptot) / k + p).tolist()
-      
   return level0_calib
   
   
@@ -121,7 +123,6 @@ def main():
   parser.add_argument("-p", "--ped",      default=None, help="Pedestal file default=%(default)r")
   parser.add_argument("-c", "--calpulse", default=None, help="Calpulse file default=%(default)r")
   parser.add_argument("-m", "--mip", default=None, help="MIP file default=%(default)r")
-  parser.add_argument("--cm", default="2", help="common mode to use default=%(default)r")
   args = parser.parse_args()
 
   #parse arguments
@@ -135,7 +136,7 @@ def main():
     raise ValueError(f'Expect at least one of {exp_keys}')
 
   #build calib dict and save
-  level0_calib = buildLevel0CalibParams(input_json, args.cm)
+  level0_calib, cm = buildLevel0CalibParams(input_json)
   saveAsJson(args.output, level0_calib)
   
 if __name__=='__main__':
