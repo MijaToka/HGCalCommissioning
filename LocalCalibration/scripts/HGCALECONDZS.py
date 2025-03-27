@@ -5,7 +5,7 @@ import numpy as np
 
 from PrepareLevel0CalibParams import buildLevel0CalibParams
 
-def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 : float, cmtype : str, onlyPedestals : bool = False, P_CM_correction : bool = False, P_CM_BXm1_correction : bool = False , factor : int = 1) -> dict:
+def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 : float, onlyPedestals : bool = False, P_CM_correction : bool = False, P_CM_BXm1_correction : bool = False , factor : int = 1) -> dict:
     """                                                                                                                                                                                                                                                                                                                                                                                
     Convert ECON-D Offline parameters to slow-control parameters used in SWAMP  
     * path_to_config : the location of the pedestals json file
@@ -29,12 +29,11 @@ def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 
     * kappa_corr: per channel                                                                                                                                                                                                                                                                                                                                                       
     * betam1_corr: per channel
     """
-
     #the configuration registry map
     config_regmap = {}
     #read the pedestals json and iterate over modules
     input_json = json.loads('{"ped":"'+path_to_config+'"}')
-    config = buildLevel0CalibParams(input_json, cmtype)
+    config = buildLevel0CalibParams(input_json)
 
     for typecode_key, c_dict in config.items():
         # read offline calibration constants
@@ -93,7 +92,12 @@ def fillECONDconfig(path_to_config : str, CE : float, mip_sf : float, mip_sf_m1 
 
         #build the register map
         c_regmap = {'ZSCommon_Global_zs_ce' : CE_int}
-
+        
+        if "MH" in typecode_key:
+            cmtype = "4"
+        elif "ML" in typecode_key:
+            cmtype = "2"
+ 
         #default routing of eRx's into CM processor
         route_erx = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         if cmtype == '2':
@@ -166,9 +170,6 @@ def main():
     parser.add_argument("--CE",
                         help='global offset %(default)s',
                         default=0, type=float)
-    parser.add_argument("--cmType",
-                        help='CM type %(default)s',
-                        default='2', type=str)
     parser.add_argument("-o", "--output",
                         help='output file (if not given, the input will be appended with "_econdzsreg") %(default)s',
                         default='', type=str)
@@ -191,7 +192,6 @@ def main():
                                 CE = args.CE,
                                 mip_sf=args.mipSF,
                                 mip_sf_m1=args.mipSFm1,
-                                cmtype=args.cmType,                                
                                 onlyPedestals = args.onlyPedestals,
                                 P_CM_BXm1_correction = args.P_CM_BXm1_correction,
                                 P_CM_correction = args.P_CM_correction,
