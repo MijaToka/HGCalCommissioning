@@ -1,107 +1,94 @@
-include: "cmssw_nodes.smk"
-import re
+#
+# PEDESTAL WORKFLOW: after unpacking we want the result of the DQM analysis to be uploaded and the NANOAOD of the DIGIs
+# The final derivation of pedestals, noise and ZS parameters is made based on the NANOAOD file
+#
 
-outbasedir = job_dict["output"].split('/Relay')[0]
-relay = job_dict["relay"]
-calibdir = f'{outbasedir}/calibrations/'
+from globals import defineGlobals
+cfgurl, job_dict, common_params = defineGlobals(workflow)
 
-rule step_JOBREPORT:
+module base_workflows:
+    snakefile:
+        "cmssw_base.smk"
+
+use rule step_SCRAM from base_workflows as step_SCRAM
+
+use rule step_RAW2DIGI from base_workflows as step_UNPACK with:
     params:
-        cfgurl = cfgurl
-    input: 
-        rules.step_RAW2DIGI.output.report,
-        rules.step_DIGI2DQM.output.report,
-        rules.step_DIGI2DQM_upload.log,
-        rules.step_DIGI2NANO.output.report,
-        env = rules.step_SCRAM.output.env,
+      **common_params,
+      cfg = "HGCalCommissioning/Configuration/test/step_RAW2NANODQM.py"
+    log:
+      "step_RAW2NANODQM.log"
     output:
-        report = "jobreport.json"
-    shell: 
-        """
-        source {input.env}
-        python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py -i ./ -j {params.cfgurl} -o {output.report}
-        """
+      "NANO.root"
 
-
-rule step_STORE:
+use rule step_DQM_upload from base_workflows as step_DQM_upload with :
     input :
-        rules.step_DIGI2DQM.output,
-        rules.step_DIGI2NANO.output,
-        rules.step_JOBREPORT.output
+       rules.step_SCRAM.output.env,
+       rules.step_UNPACK.output
+
+use rule step_JOBREPORT from base_workflows as step_JOBREPORT with:
+    input :
+      rules.step_SCRAM.output.env,
+      rules.step_UNPACK.output
+
+use rule step_STORE from base_workflows as step_STORE with:
+    input :
+      rules.step_SCRAM.output.env,
+      rules.step_UNPACK.output,
+      rules.step_JOBREPORT.output
+
+##
+## PEDESTAL ANALYSIS
+##
+rule step_PEDESTALS:
     params:
-        mycopy = "cp -v" if job_dict["output"].find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
-        outdir = f'{job_dict["output"]}',
-        tag = f'{job_dict["run"]}_{job_dict["lumisection"]}',
-        dqmtag = f'V{job_dict["lumisection"]:04d}_HGCAL_R{job_dict["run"]:09d}'
-    log:
-        "store.txt"
-    shell:
-        """
-        echo "Transferring output results > {log}"
-
-        #prepare output
-
-        #ROOT files
-        {params.mycopy} {rules.step_DIGI2DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {log}
-        {params.mycopy} {rules.step_DIGI2NANO.output.root} {params.outdir}/NANO_{params.tag}.root >> {log}	
-
-        #Report
-        {params.mycopy} {rules.step_JOBREPORT.output.report} {params.outdir}/reports/job_{params.tag}.json >> {log}
-        """
-
-
-rule step_CALIBRATION:
-    params:
-        pedfile = f"{calibdir}/Relay{relay}/pedestals.json",
-        econdcmnargs = f'-i {calibdir}/Relay{relay}/pedestals.json --mipSF 0'
+        **common_params,
+        nanodir=job_dict["output"],
+        calibout=f'{job_dict["output"]}/calibrations'
     input:
+        rules.step_STORE.log,
         env = rules.step_SCRAM.output.env,
-        upload = rules.step_STORE.log
     log:
-        'calibration.txt'
+        'step_PEDESTALS.log'
     shell:
-        """
-	
+        """	
         source {input.env}
         cd $CMSSW_BASE/src/HGCalCommissioning/LocalCalibration
 
         #
-        # Pedestal and pedestal closure analyses
+        # Pedestal analysis
         #
-	echo "Running pedestals and pedestals closure" > {log}
-        python3 scripts/HGCALPedestals.py -r {relay} -i {outbasedir} -o {calibdir} --forceRewrite
-        #python3 scripts/HGCALPedestalsClosure.py -r {relay} -i {outbasedir} -o {calibdir} --forceRewrite
+	echo "Running pedestals" > {log}
+        python3 scripts/HGCALPedestals.py -i {params.nanodir} -o {params.calibout} --forceRewrite
                 
         #
         # CMSSW L0 calib file
         #
-        python3 scripts/PrepareLevel0CalibParams.py --cm 2 \
-            -p {params.pedfile}\
-            -o {calibdir}/Relay{relay}/level0_calib_params.json
+        python3 scripts/PrepareLevel0CalibParams.py \
+            -p {params.calibout}/pedestals.json \
+            -o {params.calibout}/level0_calib_params_Run{params.run}.json
 
         #
         # ECON-D ZS files
         #
         for f in 0 3; do
             echo "Generating ECON-D ZS for f=${{f}}"  >> {log}
-            python3 scripts/HGCALECONDZS.py  {params.econdcmnargs} \
-                --P_CM_correction True  -F ${{f}} -o {calibdir}/Relay{relay}/pedestals_econzsreg_P_N${{f}}_CM2.json;
-            python3 scripts/HGCALECONDZS.py {params.econdcmnargs} \
-                --onlyPedestals True  -F ${{f}} -o {calibdir}/Relay{relay}/pedestals_econzsreg_P_N${{f}}.json; 
+            python3 scripts/HGCALECONDZS.py  -i {params.calibout}/pedestals.json --mipSF 0 \
+                --P_CM_correction True  -F ${{f}} -o {params.calibout}/pedestals_econzsreg_P_N${{f}}_CM.json;
+            python3 scripts/HGCALECONDZS.py -i {params.calibout}/pedestals.json --mipSF 0 \
+                --onlyPedestals True  -F ${{f}} -o {params.calibout}/pedestals_econzsreg_P_N${{f}}.json;
         done
 
         cd -
-        echo "Calibrations stored in {calibdir}" >> {log}
+        echo "Calibrations stored in {params.calibout}" >> {log}
         """
 
 
 rule all:
     input:
         rules.step_SCRAM.output,
-        rules.step_RAW2DIGI.output,
-        rules.step_DIGI2DQM.output,
-        rules.step_DIGI2DQM_upload.log,
-        rules.step_DIGI2NANO.output,
+        rules.step_UNPACK.output,
         rules.step_JOBREPORT.output,
+        rules.step_DQM_upload.log,
         rules.step_STORE.log,
-        rules.step_CALIBRATION.log
+        rules.step_PEDESTALS.log

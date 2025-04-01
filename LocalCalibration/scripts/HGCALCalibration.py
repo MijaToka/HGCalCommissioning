@@ -11,7 +11,13 @@ import sys
 sys.path.append("./")
 from DigiAnalysisUtils import analyzeSimplePedestal
 from HGCALCalibTaskWrapper import submitWrappedTasks
+try:
+  from HGCalCommissioning.LocalCalibration.JSONEncoder import *
+except ImportError:
+  sys.path.append('./python/')
+  from JSONEncoder import *
 
+  
 class HGCALCalibration(ABC):
     """HGCALCalibration is a base class which can be used for procedures which make use of the NANO to fill histograms
     from where different quantities can be derived. The class will execute the analysis flow when it's `__init__` method is called
@@ -29,41 +35,34 @@ class HGCALCalibration(ABC):
     * createCorrectionsFile : the method that makes use of the results to create a file
     """
  
-    def __init__ (self):
+    def __init__ (self,raw_args=None):
         """Constructor of HGCALCalibration class"""
 
         #parse arguments and add as class attributes
         self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("-i", "--input",
-                                help='input directory=%(default)s',
-                                default="/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/TB2024/")
+        self.parser.add_argument("-i", "--input", nargs='+',
+                                 help='input directory=%(default)s',
+                                 default="/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/Test/Run1743170957/c7e3e9cc-0cbd-11f0-8349-b8ca3af74182/prompt")
+        self.parser.add_argument("-o", "--output",
+                                help='output directory default=%(default)s',
+                                default='./calibrations')
+        self.parser.add_argument("--scanmap", metavar='JSON', default=None,
+                                 help=("JSON file mapping a scan : run, directory and config parameters to use with their value"))
         self.parser.add_argument("--moduleList",
                                 help='process only these modules (csv list) %(default)s',
                                 default='', type=str)
         self.parser.add_argument("--task_spec",
                                  help='process a previously created task_spec',
                                  default=None, type=str)
-        self.parser.add_argument("-r", "--relays", type=int, nargs='+',
-                                help='single (or a list of) relay(s) =%(default)s',
-                                default=None)
         self.parser.add_argument("--maxThreads", type=int,
                                 help='max threads to use=%(default)s',
                                 default=8)
-        self.parser.add_argument("-o", "--output",
-                                help='output directory default=%(default)s',
-                                default='./calibrations')
         self.parser.add_argument("--forceRewrite",
                                 help='force re-write of previous output=%(default)s',
                                 action='store_true')
         self.parser.add_argument("--skipHistoFiller",
                                  help='skip filling of the histograms=%(default)s',
                                  action='store_true')
-        self.parser.add_argument("--relaymap",metavar='JSON',
-                                 help=("JSON file mapping relay number to a dictionary with extra"
-                                       " config parameters and their value (e.g. for scan)"))
-        self.parser.add_argument("--nanoTag",
-                                 help='nano version tag to use, if empty use latest default=%(default)s',
-                                 default='', type=str)
         self.parser.add_argument("-v", '--verbosity', type=int, nargs='?', const=1, default=0,
                                  help="set verbosity level" )
         self.parser.add_argument("--doHexPlots",
@@ -73,27 +72,18 @@ class HGCALCalibration(ABC):
                                  help="Create task specs but do not execute anything else")
         self.parser.add_argument("--nosub", action='store_true', help="do not submit the histo filler task to condor (dry run)")
         self.addCommandLineOptions(self.parser)
-        self.cmdargs = self.parser.parse_args()
+        self.cmdargs = self.parser.parse_args(raw_args)
 
-        #parse runs
-        if self.cmdargs.relays is None:
-            if self.cmdargs.relaymap:
-                with open(self.cmdargs.relaymap,'r') as mapfile:
-                    relaymap = json.load(mapfile)
-                self.cmdargs.relays = [int(r) for r in relaymap]
-                if self.cmdargs.verbosity>=1:
-                    print(f"__init__: relays from relaymap {self.cmdargs.relays}")
-            else:
-                raise OSError("No runs defined via --run, nor --runmap !?")
-
-        #run will always be appended to the output directory
-        #except if we are executing and already pre-filled task spec
-        if self.cmdargs.task_spec is None:
-            if len(self.cmdargs.relays)==1: # single run (for pedestals, etc.)
-                self.cmdargs.output=os.path.join(self.cmdargs.output,f'Relay{self.cmdargs.relays[0]}')
-            else:
-                self.cmdargs.output = os.path.join(self.cmdargs.output,f"Relay{self.cmdargs.relays[0]}-{self.cmdargs.relays[-1]}")
-
+        #build the list of runs to analyze
+        scanmap = {}
+        if not self.cmdargs.scanmap is None:
+            with open(self.cmdargs.scanmap,'r') as mapfile:
+                scanmap = json.load(mapfile)
+        else:
+            scanmap["inc"] = { 'idx':0, 'input': [], 'params':{} }
+            for i in self.cmdargs.input:
+                scanmap['inc']['input'] += glob.glob(f'{i}/NANO*.root')
+            
         #histogram filling
         calibresults = []
         if not self.cmdargs.skipHistoFiller:
@@ -104,7 +94,7 @@ class HGCALCalibration(ABC):
                 self.histofiller = analyzeSimplePedestal
 
             #prepare the jobs (run info#modules, sub-samples, etc.)
-            self.prepareHistogramFiller(self.cmdargs.nanoTag)
+            self.prepareHistogramFiller(scanmap)
 
             if self.cmdargs.createHistoFillerTask:
                 submitWrappedTasks(tasks=self.histofill_tasks, classname=type(self).__name__, dryRun=self.cmdargs.nosub)
@@ -157,10 +147,10 @@ class HGCALCalibration(ABC):
         pass
 
 
-    def prepareHistogramFiller(self, nanotag : str):
+    def prepareHistogramFiller(self, scanmap : dict):
         """
-        Steers preparation of the analysis for a run (parse commandline,
-        get run information, prepare output).
+        Steers preparation of the analysis for a run
+        scanmap : dict = { 'key' : str : { 'idx' : int, 'input' : list of NANO, 'params' :dict }
         """
 
         #if a task spec is given use it directly
@@ -175,93 +165,11 @@ class HGCALCalibration(ABC):
         if os.path.isdir(self.cmdargs.output) and not self.cmdargs.forceRewrite:
             raise ValueError(f'Output directory {self.cmdargs.output} already exists')        
         os.makedirs(self.cmdargs.output + '/histofiller', exist_ok=True)
-
-        #get the run row in the run registry
-        try:
-            nanodirs = self.getNANOFromRunRegistry(nanotag)
-        except Exception as e:
-            print(f'Failed to get info from run registry: {e}')
-            print(f'Fallback on searching directory')
-            print(f'Search for NANOS in : {self.cmdargs.input}/Relay{{{self.cmdargs.relays}}}')
-            nanodirs = self.findNANOFrom(rdirlist = [f'{self.cmdargs.input}/Relay{r}' for r in self.cmdargs.relays], nanotag=nanotag )
-
-        #create tasks
-        self.histofill_tasks = self.buildHistoFillerTasks(nanodirs)
-
-
-    def findNANOFrom(self, rdirlist : list, nanotag : str = ''):
-        """looks for NANO files and pick the latest"""
-
-        nanodirs = [ ]
-        for d in rdirlist:
-            nano  = f"{d}/*/*/NANO*.root"
-            nanos = glob.glob(nano)
-
-            #fall back on old scheme... this should go once run registry is compliant with new scheme
-            if len(nanos)==0:
-                rbasedir, run = re.findall('(.*)/Relay(\d+)', d)[0]
-                nano  = f"{rbasedir}/Relay*/*/*/NANO_{run}_*.root"
-                print(f'[findNANOFrom] fallback search with nano  = {nano} ... this make take longer')
-                nanos += glob.glob(nano)
-                
-            nano_versions=[]
-            for n in nanos:
-                ndir = os.path.dirname(n)
-                nversion = os.path.basename(ndir)
-                creation_time=os.path.getctime(ndir)
-
-                #if a specific version is requested check it matches
-                if nanotag!='' and nversion!=nanotag: continue
-                nano_versions.append( (ndir,creation_time) )            
-            nano_versions = sorted( list(set(nano_versions)), key=lambda x: x[1], reverse=False)
-
-            if len(nano_versions)==0:
-                print(f"WARNING! Could not find {nano}!")
-                nanodirs.append(None)
-            else:
-                nanodirs.append(nano_versions.pop()[0])
-
-        #check that at least one was found
-        nmissed = sum([x is None for x in nanodirs])
-        if nmissed>0:
-            print(f"WARNING! {nmissed} directories have no NANO...")
-            if nmissed == len(rdirlist):
-                raise ValueError(f"No NANO to analyze...")
-
-        return [x for x in nanodirs if not x is None]
-
-
-    def getNANOFromRunRegistry(self, nanotag : str) -> pd.core.series.Series:
-        """reads the run registry and retrieves the information about this run"""
-
-        #check if run registry is valid and open it
-        runregfiles = glob.glob(f'{self.cmdargs.input}/runregistry*')
-        if len(runregfiles)==0:
-            raise OSError(f"No runregistry files in {self.cmdargs.input}")
-        _, runreg_ext = os.path.splitext(runregfiles[0])
-        if runreg_ext=='.csv':
-            run_registry = pd.read_csv(runregfiles[0],sep='\s+', header='infer')
-        elif runreg_ext=='.feather':
-            run_registry = pd.read_feather(runregfiles[0])
-        else:
-            raise IOError(f'Unable to decode runregistry with {runreg_ext} extension')
         
-        #get the run
-        try:
-            if len(self.cmdargs.relays)==1:
-                mask = (run_registry['Relay']==self.cmdargs.relay[0]) & (run_registry['RecoValid']==True)
-            else: # for scans with multiple runs
-                mask = (run_registry['Relay'].isin(self.cmdargs.relays)) & (run_registry['RecoValid']==True)
-        except Exception as e:
-            raise ValueError(f'Unable to find  {self.cmdargs.relay} in run registry file {e}')
-        if mask.sum()==0:
-            raise ValueError(f'Unable to find {self.cmdargs.relay} in run registry file')
-
-        #look for NANO in the latest UUID
-        return self.findNANOFrom(rdirlist = [run_registry.loc[mask].iloc[-1].copy()], nanotag = nanotag)
-
-
-    def buildScanParametersDict(self, file_list : list, module_list : list, nano_patt : str = 'Relay(\d+)/(.*)/(.*)/NANO_(\d+)_(\d+).root') -> dict:
+        #create tasks
+        self.histofill_tasks = self.buildHistoFillerTasks(scanmap)
+        
+    def buildScanParametersDict(self, file_list : list, module_list : list, nano_patt : str = 'Run(\d+)/(.*)/(.*)/NANO_(\d+)_(\d+).root') -> dict:
         """
         If the user passes a JSON via command line option --runmap, this default implementation will use
         it as a map between files/relays/runs and configuration parameters in order to define a dictionary
@@ -270,10 +178,10 @@ class HGCALCalibration(ABC):
         """
 
         #read relay map
-        if not self.cmdargs.relaymap:
+        if self.cmdargs.scanmap is None:
             return { }
-        with open(self.cmdargs.relaymap,'r') as mapfile:
-          relaymap = json.load(mapfile)
+        with open(self.cmdargs.scanmap,'r') as mapfile:
+          scanmap = json.load(mapfile)
 
 
         #build the sequential list of scan parameters
@@ -281,26 +189,26 @@ class HGCALCalibration(ABC):
         for i, fname in enumerate(file_list):
 
             try:
-                relay, uuid, version, run, lumi = re.findall(nano_patt,fname)[0]
+                run, uuid, version, run, lumi = re.findall(nano_patt,fname)[0]
             except Exception as e:
                 print(f'WARNING! Failed to interpret nano patter in {fname} : {e}')
                 continue
             
-            if not relay in relaymap:
-                print(f'WARNING! Relay {relay} is not in the relaymap - available: {relaymap.keys()} - ignoring')
+            if not run in scanmap:
+                print(f'WARNING! Run {run} is not in the scanmap - available: {scanmap.keys()} - ignoring')
                 continue
 
             scanparams = { }
-            for mod in module_list:  # TODO: add module layer to relaymap ?
+            for mod in module_list:  # TODO: add module layer to scanmap ?
                 scanparams[mod] = { 'index': i } # index of this scanpoint/run
-                scanparams[mod].update(relaymap[relay]) # { parameter: value }
+                scanparams[mod].update(scanmap[run]) # { parameter: value }
 
             scanparams_list.append( scanparams )
             
         return scanparams_list
 
 
-    def buildHistoFillerTasks(self, nanodirs : list) -> list:
+    def buildHistoFillerTasks(self, scanmap : dict) -> list:
         """for each module which needs to processed independently a task is created and described in a json file
         the format of the json file is analogous to that proposed in 
         https://root.cern/doc/master/classROOT_1_1RDF_1_1Experimental_1_1RDatasetSpec.html
@@ -310,41 +218,37 @@ class HGCALCalibration(ABC):
 
         task_list = []
 
-        #create list of file lists
-        flist = [ ]
-        for nanodir in sorted(nanodirs):
-            flist_ = glob.glob(f"{nanodir}/NANO*root")
-            flist.extend(flist_)
-            if self.cmdargs.verbosity>=1:
-                print(f"buildHistoFillerTasks: nanodir={nanodir}: flist={flist_}")
-
         #get modules
-        modules = self.getModulesFromRun(flist[0])
-
-        #call the derived class implementation of the method to build the scan parameters
-        scanparams_dict = self.buildScanParametersDict(flist,list(modules.keys()))
+        first_key = list(scanmap.keys())[0]
+        first_file = scanmap[first_key]['input'][0]
+        modules = self.getModulesFromRun(first_file)
 
         #with all the information create a task per module
         for m, (fed,seq,nerx) in modules.items():
 
             task_spec={'samples':{}}
-            for i, f in enumerate(flist):
-                key=f'data{i+1}'
-                task_spec['samples'][key] = {
+            
+            for scan_key, scan_point in scanmap.items():
+                i = scan_point['idx']+1
+                task_key = f'data{i}'
+                task_spec['samples'][task_key] = {
                     'trees' : ['Events'],
-                    'files' : [ self.xrootdFileName(f) ],
-                    'metadata' : { 'index':i+1, 'typecode':m, 'category':'data', 'fed':fed, 'seq':seq, 'nerx':nerx, 'type':type(self).__name__}
+                    'files' : [ self.xrootdFileName(f) for f in scan_point['input'] ],
+                    'metadata' : {
+                        'index':i,
+                        'typecode':m,
+                        'category':'data',
+                        'fed':fed,
+                        'seq':seq,
+                        'nerx':nerx,
+                        'type':type(self).__name__,
+                        **scan_point['params']
+                    }
                 }
-
-                #add extra scan parameters to metadata (if any)
-                if len(scanparams_dict)>0:
-                  extra_params = scanparams_dict[i][m]
-                  task_spec['samples'][key]['metadata'].update(extra_params)
 
             #save json 
             outjson = f"{self.cmdargs.output}/histofiller/{m}.json"
-            with open(outjson, "w") as fout: 
-                json.dump(task_spec, fout,  indent = 4)
+            saveAsJson(outjson,task_spec)
             task_list.append( (self.cmdargs.output + '/histofiller', m, outjson, self.cmdargs) )
 
         #return the location of the tasks

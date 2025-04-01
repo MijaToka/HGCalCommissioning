@@ -120,5 +120,4 @@ class HGCALPedestals(HGCALCalibration):
         return jsonurl
 
 if __name__ == '__main__':
-
-    pedestal = HGCALPedestals()
+  HGCALPedestals()
