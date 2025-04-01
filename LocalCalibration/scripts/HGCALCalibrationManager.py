@@ -38,8 +38,8 @@ class HGCALCalibrationManager:
         #get the status and the dictionary defining the job
         scan_status, scan_map = self.getScanInputs(df)
         if not scan_status:
-            print(f'[WARNING] Run type {run_type} Ref {cmdargs.reference} seems not complete, skipping it!')
-            return -1
+            print(f'[WARNING] Run type {cmdargs.reference} seems not complete, skipping it!')
+            return
         
         #extract the calibration type and load module that handles it
         run_type = df['Type'].iloc[-1]
@@ -47,7 +47,7 @@ class HGCALCalibrationManager:
         calib_type = calib_type_map[run_type]
         if not calib_type:
             print(f'[WARNING] Run type {run_type} is not supported by HGCALCalibrationManager, skipping it!')
-            return -1
+            return
 
         outputdir = f'{cmdargs.output}/{run_type}/Relay{cmdargs.reference}'
         os.makedirs(outputdir, exist_ok=True)
@@ -89,6 +89,7 @@ class HGCALCalibrationManager:
         for run, group in ref_df.groupby('Run'):
 
             mask = (group['Ended']==True) & (group['Reports'].str.len()>0)
+            if mask.sum()==0: continue
             last_entry_report = json.loads(group[mask].iloc[-1]['Reports'][0])
             nanodir = last_entry_report['Output']
             jobreport = glob.glob(f'{nanodir}/reports/job*{run}*.json')[0]
