@@ -1,56 +1,46 @@
-include: "cmssw_nodes.smk"
-import re
+#
+# DQM WORKFLOW: after unpacking DQM is imediately run
+# The final content of the run directory are DQM files only
+#
 
-outbasedir = job_dict["output"].split('/Relay')[0]
-relay = job_dict["relay"]
-calibdir = f'{outbasedir}/calibrations/'
+from globals import defineGlobals
+cfgurl, job_dict, common_params = defineGlobals(workflow)
 
-rule step_JOBREPORT:
+module base_workflows:
+    snakefile:
+        "cmssw_base.smk"
+
+use rule step_SCRAM from base_workflows as step_SCRAM
+
+use rule step_RAW2DIGI from base_workflows as step_UNPACK with:
     params:
-        cfgurl = cfgurl
-    input: 
-        rules.step_RAW2DIGI.output.report,
-        rules.step_DIGI2DQM.output.report,
-        env = rules.step_SCRAM.output.env,
+      **common_params,
+      cfg = "HGCalCommissioning/Configuration/test/step_RAW2DQM.py"
     output:
-        report = "jobreport.json"
-    shell: 
-        """
-        source {input.env}
-        python $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/jobReportBuilder.py -i ./ -j {params.cfgurl} -o {output.report}
-        """
-
-
-rule step_STORE:
-    input :
-        rules.step_DIGI2DQM.output,
-        rules.step_JOBREPORT.output
-    params:
-        mycopy = "cp -v" if job_dict["output"].find('/eos/cms/')<0 else "eos root://eoscms.cern.ch cp",
-        outdir = f'{job_dict["output"]}',
-        tag = f'{job_dict["run"]}_{job_dict["lumisection"]}',
-        dqmtag = f'V{job_dict["lumisection"]:04d}_HGCAL_R{job_dict["run"]:09d}'
+      "FrameworkJobReport_RAW2DIGI.xml"
     log:
-        "store.txt"
-    shell:
-        """
-        echo "Transferring output results > {log}"
+      "step_RAW2DQM.log"
 
-	#prepare output
+use rule step_DQM_upload from base_workflows as step_DQM_upload with :
+    input :
+       rules.step_SCRAM.output.env,
+       rules.step_UNPACK.output
 
-        #ROOT files
-        {params.mycopy} {rules.step_DQM.output.root} {params.outdir}/DQM_{params.dqmtag}.root >> {log}
-        #{params.mycopy} {rules.step_RECO.output.root} {params.outdir}/RECO_{params.tag}.root >> {log}
+use rule step_JOBREPORT from base_workflows as step_JOBREPORT with:
+    input :
+      rules.step_SCRAM.output.env,
+      rules.step_UNPACK.output
 
-        #Report
-        {params.mycopy} {rules.step_JOBREPORT.output.report} {params.outdir}/reports/job_{params.tag}.json >> {log}
-        """
+use rule step_STORE from base_workflows as step_STORE with:
+    input :
+      rules.step_SCRAM.output.env,
+      rules.step_UNPACK.output,
+      rules.step_JOBREPORT.output
 
 rule all:
     input:
         rules.step_SCRAM.output,
-        rules.step_RAW2DIGI.output,
-        rules.step_DIGI2DQM.output,
-        rules.step_DIGI2DQM_upload.log,
+        rules.step_UNPACK.output,
         rules.step_JOBREPORT.output,
+        rules.step_DQM_upload.log,
         rules.step_STORE.log

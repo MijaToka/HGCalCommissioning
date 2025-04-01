@@ -136,7 +136,7 @@ def main():
     raise ValueError(f'Expect at least one of {exp_keys}')
 
   #build calib dict and save
-  level0_calib, cm = buildLevel0CalibParams(input_json)
+  level0_calib = buildLevel0CalibParams(input_json)
   saveAsJson(args.output, level0_calib)
   
 if __name__=='__main__':

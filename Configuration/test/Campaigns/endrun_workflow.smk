@@ -1,16 +1,22 @@
-include: "cmssw_env.smk"
-import json
-import os
-import re
+#
+# RUN END WORKFLOW:
+# - build the computing report (from the available FrameworkJobReport summaries)
+# - build the DQM collector report (from the available DQM files)
+#
 
-cfgurl=workflow.config_settings.configfiles[0]
-with open(cfgurl,'r') as cfg:
-    job_dict = json.load(cfg)
+from globals import defineGlobals
+cfgurl, job_dict, common_params = defineGlobals(workflow)
+
+module base_workflows:
+    snakefile:
+        "cmssw_base.smk"
+	
+use rule step_SCRAM from base_workflows as step_SCRAM
 
 rule step_REPORTCOLLECTOR:
     params:
-        resultsdir = f"{job_dict['input']}",
-        reportsdir = f"{job_dict['input']}/reports"
+        **common_params,
+        cmssw_output=f'{job_dict['input']}'
     input:
         env = rules.step_SCRAM.output.env
     output:
@@ -19,10 +25,15 @@ rule step_REPORTCOLLECTOR:
     shell: 
         """
         source {input.env}
-        python3 $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/runJobReportCollector.py -i {params.reportsdir} -o {output.report}
-	python3 $CMSSW_BASE/src//HGCalCommissioning/DQM/test/dqm_collector.py -i {params.resultsdir} -o {output.dqmcollector}
-	cp -v {output.report} {params.reportsdir}/
-	cp -v {output.dqmcollector} {params.reportsdir}/
+        python3 $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/runJobReportCollector.py \
+		-i {params.cmssw_output}/reports -o {output.report}
+	python3 $CMSSW_BASE/src//HGCalCommissioning/DQM/test/dqm_collector.py -i {params.cmssw_output} -o {output.dqmcollector}
+	cp -v {output.report} {params.cmssw_output}/reports/
+	cp -v {output.dqmcollector} {params.cmssw_output}/reports/
+
+	#uncomment once these parameters become available
+	#python3 $CMSSW_BASE/src/HGCalCommissioning/LocalCalibration/scripts/HGCALCalibrationManager.py \
+	#	-i {params.runregistry} -r {params.reference} -o {params.trimmingoutput}
         """
 
 rule all:
