@@ -30,10 +30,6 @@ rule step_REPORTCOLLECTOR:
 	python3 $CMSSW_BASE/src//HGCalCommissioning/DQM/test/dqm_collector.py -i {params.cmssw_output} -o {output.dqmcollector}
 	cp -v {output.report} {params.cmssw_output}/reports/
 	cp -v {output.dqmcollector} {params.cmssw_output}/reports/
-
-	#uncomment once these parameters become available
-	#python3 $CMSSW_BASE/src/HGCalCommissioning/LocalCalibration/scripts/HGCALCalibrationManager.py \
-	#	-i {params.runregistry} -r {params.reference} -o {params.trimmingoutput}
         """
 
 rule all:
