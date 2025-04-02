@@ -80,22 +80,23 @@ class HGCALTrimInvScan(HGCALCalibration):
              .Define('chadc',         'HGCDigi_channel[maskadc]') \
              .Define('chtypeadc',     'HGCDigi_chType[maskadc]') \
              .Define('adc',           'HGCDigi_adc[maskadc]') \
+             .Define('modulecm',      'HGCDigi_cm[maskadc]/2') \
              .Filter('Sum(maskadc)>0')
 
         #add the profile
-        chbins = (nch,-0.5,nch-0.5)    
+        chbins = (nch,-0.5,nch-0.5)
         graphlist = [
-          rdf.Profile2D(("adcprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'adc')
+          rdf.Profile2D(("adcprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'adc'),
+          rdf.Profile2D(("modulecmprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'modulecm')
         ]
         ROOT.RDF.RunGraphs(graphlist)
-        
         histolist = [scanInfoHist]
         histolist += [obj.GetValue() for obj in graphlist]
         postfix='' if ix_filt==-1 else f'_ix{ix_filt}'
         rfile = f'{outdir}/{module}{postfix}.root'
         fillHistogramsAndSave(histolist = histolist, rfile = rfile)
         return (module,rfile)
-        
+
     @staticmethod
     def analyze(args):
         """
@@ -124,19 +125,23 @@ class HGCALTrimInvScan(HGCALCalibration):
         adcprofile = fIn.Get('adcprofile')
         adcprofile.SetErrorOption('s')
         nch = adcprofile.GetNbinsY()
+
+        modulecmprofile = fIn.Get('modulecmprofile')
+        modulecmprofile.SetErrorOption('s')
+
         nerx = int(nch/37)
         fit_results = []
         for ierx in range(nerx):
 
           choffset = ierx*37+1
+
           if doPlots:
             fig, ax = plt.subplots(7,6,figsize=(18,28),sharex=True,sharey=True)
 
-          for ich in range(37):
-            
-            y = np.array([adcprofile.GetBinContent(ipt+1,ich+choffset) for ipt in range(npts)])
-            yerr = np.array([adcprofile.GetBinError(ipt+1,ich+choffset) for ipt in range(npts)])
-            
+          for ich in range(-1, 37):
+            profile = modulecmprofile if ich == -1 else adcprofile
+            y = np.array([profile.GetBinContent(ipt+1,ich+choffset) for ipt in range(npts)])
+            yerr = np.array([profile.GetBinError(ipt+1,ich+choffset) for ipt in range(npts)])
             #fit the model
             try:
               popt, pcov = curve_fit(trim_inv_model, x, y, sigma=yerr)
@@ -144,21 +149,30 @@ class HGCALTrimInvScan(HGCALCalibration):
               yexp=trim_inv_model(x,*popt)
               chi2 = (((y-yexp)/yerr)**2).sum()
               ndof = len(x)-len(popt)
-              fit_results.append( [ierx, ich+choffset, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True] )
-            except:
-              fit_results.append( [ierx, ich+choffset] + [-1]*5 + [False] )
+              cm_flag = (ich == -1)
+              fit_results.append( [ierx, ich+choffset, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, cm_flag] )
+            except Exception as e:
+              print(e)
+              fit_results.append( [ierx, ich+choffset] + [-1]*5 + [False]+ [-1] )
 
             #show the fit result
             if not doPlots: continue
-            ix = ich%ax.shape[0]
-            iy = int(ich/ax.shape[0])
+            #ix = ich%ax.shape[0]
+            #iy = int(ich/ax.shape[0])
+            if ich == -1: ix, iy = ax.shape[0] - 1, ax.shape[1] - 1
+            else:
+             ix = ich % ax.shape[0]
+             iy = int(ich / ax.shape[0])
+
             ax[ix,iy].grid()
             ax[ix,iy].errorbar(x,y,yerr=yerr,marker='o',elinewidth=1,capsize=1,color='k',ls='none')
 
             txtargs = { 'transform':ax[ix,iy].transAxes, 'fontsize':12 }
-            if fit_results[-1][-1]:
-              ax[ix,iy].plot(x,yexp,ls='-')            
-              ax[ix,iy].text(0.1,0.9,f'Channel {ich+choffset}', **txtargs)
+            if fit_results[-1][-2]:
+              ax[ix,iy].plot(x,yexp,ls='-')
+              channel_name = "CM channel" if ich == -1 else f'Channel {ich+choffset}'
+              ax[ix, iy].text(0.1, 0.9, channel_name, **txtargs)
+              #ax[ix,iy].text(0.1,0.9,f'Channel {ich+choffset}', **txtargs)
               ax[ix,iy].text(0.1,0.85,rf'Slope= ${popt[0]:3.2f} \pm {popt_unc[0]:3.2f}$', **txtargs)
               ax[ix,iy].text(0.1,0.8,rf'Offset = ${popt[1]:3.2f} \pm {popt_unc[1]:3.2f}$', **txtargs)
               ax[ix,iy].text(0.1,0.75,rf'$\chi^2/dof={chi2:3.2f}/{ndof}$', **txtargs)
@@ -175,7 +189,7 @@ class HGCALTrimInvScan(HGCALCalibration):
         #convert to a pandas for further manipulation
         fit_results = pd.DataFrame(
           fit_results,
-          columns = ['ierx','ich','slope','slope_unc','offset','offset_unc','reduced_chi2','valid']
+          columns = ['ierx','ich','slope','slope_unc','offset','offset_unc','reduced_chi2','valid', 'cm_mode']
         )
 
         #determine the max offset per erx
