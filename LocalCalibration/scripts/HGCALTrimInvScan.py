@@ -260,9 +260,9 @@ class HGCALTrimInvScan(HGCALCalibration):
             typecode, fits = entry['Typecode'], entry['Fits']
             fits = fits.set_index(['ich']).sort_index()
             fits['roc'] = fits['ierx'].floordiv(2)
-            fits['trim_inv'] = fits['trim_inv_optim'].fillna(0).astype('int')
+            fits['trim_inv'] = fits['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
             fits = fits[['roc', 'trim_inv', 'chType']]
-            masks = {'calib': fits['chType'] == 0, 'ch': fits['chType'] == 1, 'cm': fits['chType'] == 2}
+            masks = {'calib': fits['chType'] == 0, 'ch': (fits['chType'] == -1) | (fits['chType'] == 1), 'cm': fits['chType'] == 2}
             for key, mask in masks.items():
                 data[key][typecode] = fits[mask].groupby('roc').apply(
                     lambda roc: (r := roc.reset_index(drop = True)).groupby(r.index).apply(
