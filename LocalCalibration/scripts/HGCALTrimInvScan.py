@@ -87,7 +87,8 @@ class HGCALTrimInvScan(HGCALCalibration):
         chbins = (nch,-0.5,nch-0.5)
         graphlist = [
           rdf.Profile2D(("adcprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'adc'),
-          rdf.Profile2D(("modulecmprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'modulecm')
+          rdf.Profile2D(("modulecmprofile", f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'modulecm'),
+          rdf.Profile1D(("chType", f"{module};Channel;Channel Type", *chbins), 'chadc', 'chtypeadc')
         ]
         ROOT.RDF.RunGraphs(graphlist)
         histolist = [scanInfoHist]
@@ -118,6 +119,7 @@ class HGCALTrimInvScan(HGCALCalibration):
         #loop over channels and fit
         fIn = ROOT.TFile.Open(url)
         
+        chTypeprofile = fIn.Get('chType')
         scaninfo = fIn.Get('scaninfo')
         npts = scaninfo.GetNbinsX()
         x = np.array([scaninfo.GetBinContent(ipt+1,2) for ipt in range(npts)]) 
@@ -139,6 +141,7 @@ class HGCALTrimInvScan(HGCALCalibration):
             fig, ax = plt.subplots(7,6,figsize=(18,28),sharex=True,sharey=True)
 
           for ich in range(-1, 37):
+            chType = 2 if (ich == -1) else chTypeprofile.GetBinContent(ich+choffset) # 0: calibration, 1: channel, 2: common mode
             profile = modulecmprofile if ich == -1 else adcprofile
             y = np.array([profile.GetBinContent(ipt+1,ich+choffset) for ipt in range(npts)])
             yerr = np.array([profile.GetBinError(ipt+1,ich+choffset) for ipt in range(npts)])
@@ -149,11 +152,10 @@ class HGCALTrimInvScan(HGCALCalibration):
               yexp=trim_inv_model(x,*popt)
               chi2 = (((y-yexp)/yerr)**2).sum()
               ndof = len(x)-len(popt)
-              cm_flag = (ich == -1)
-              fit_results.append( [ierx, ich+choffset, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, cm_flag] )
+              fit_results.append( [ierx, ich+choffset, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, chType] )
             except Exception as e:
               print(e)
-              fit_results.append( [ierx, ich+choffset] + [-1]*5 + [False]+ [-1] )
+              fit_results.append( [ierx, ich+choffset] + [-1]*5 + [False]+ [chType] )
 
             #show the fit result
             if not doPlots: continue
@@ -189,7 +191,7 @@ class HGCALTrimInvScan(HGCALCalibration):
         #convert to a pandas for further manipulation
         fit_results = pd.DataFrame(
           fit_results,
-          columns = ['ierx','ich','slope','slope_unc','offset','offset_unc','reduced_chi2','valid', 'cm_mode']
+          columns = ['ierx','ich','slope','slope_unc','offset','offset_unc','reduced_chi2','valid','chType']
         )
 
         #determine the max offset per erx
@@ -253,13 +255,32 @@ class HGCALTrimInvScan(HGCALCalibration):
 
         """ final tweaks of the analysis results to export as yaml """
         
-        correctors={}
+        data = {'calib': {}, 'ch': {}, 'cm': {}}
+        for entry in results:
+            typecode, fits = entry['Typecode'], entry['Fits']
+            fits = fits.set_index(['ich']).sort_index()
+            fits['roc'] = fits['ierx'].floordiv(2)
+            fits['trim_inv'] = fits['trim_inv_optim'].fillna(0).astype('int')
+            fits = fits[['roc', 'trim_inv', 'chType']]
+            masks = {'calib': fits['chType'] == 0, 'ch': fits['chType'] == 1, 'cm': fits['chType'] == 2}
+            for key, mask in masks.items():
+                data[key][typecode] = fits[mask].groupby('roc').apply(
+                    lambda roc: (r := roc.reset_index(drop = True)).groupby(r.index).apply(
+                        lambda ch : ch[["trim_inv"]].to_dict("records")[0]
+                    ).to_dict()
+                ).to_dict()
 
-        yamlurl = f'{self.cmdargs.output}/triminvscan_results.yaml'
+        yamlurl = []
+        for typecode, rocs in data['ch'].items():
+            for roc in rocs.keys():
+                yamlurl.append(f'{self.cmdargs.output}/{typecode.replace("_", "-")}_roc{roc}.yaml')
+                output = {k: data[k][typecode][roc] if roc in data[k][typecode] else {} for k in data.keys()}
+                with open(yamlurl[-1], 'w') as yaml_file:
+                    yaml.dump(output, yaml_file, default_flow_style=False)
+
         return yamlurl
 
       
 
 if __name__ == '__main__':
   HGCALTrimInvScan()
-    
