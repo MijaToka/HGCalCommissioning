@@ -1,12 +1,14 @@
 import sys
 sys.path.append("./")
-from HGCALCalibration import HGCALCalibration
-import DigiAnalysisUtils as DAU
-import HexPlotUtils as HPU
 import numpy as np
 import os
 import ROOT
 import pandas as pd
+
+# import common HGCalCommissioning tools
+from HGCalCalibration import HGCalCalibration
+import DigiAnalysisUtils as DAU
+import HexPlotUtils as HPU
 try:
   from HGCalCommissioning.LocalCalibration.CalPulseModel import CalPulseModel
   from HGCalCommissioning.LocalCalibration.JSONEncoder import *
@@ -15,30 +17,25 @@ except ImportError:
   from CalPulseModel import CalPulseModel
   from JSONEncoder import *
 
-class HGCALCalPulse(HGCALCalibration):
-
-    def __init__(self):
-        super().__init__()
-        
+class HGCalCalPulseScan(HGCalCalibration):
+    
     def addCommandLineOptions(self,parser):
         """Add specific command line options for pedestals."""
         #parser.add_argument("--injChans", nargs='+',
         #                    help="injected channels")
         parser.add_argument("--skipFits", action='store_true',
                             help="skip fits and use results already stored in the feather files")
-        parser.add_argument("--addControlPlots", action='store_true',
-                            help="add control plots for scan")
         parser.add_argument("--minq_totfit", default=250., type=float,
                             help="minimum charge for TOT fit")
-        
+    
     @staticmethod
     def histofiller(args):
         """Customize the base histo filler from the digi analysis utils."""
         outdir, module, task_spec, cmdargs = args
         filter_conds = { '': "HGCMetaData_trigType==2" }
-        status = DAU.scanHistoFiller(outdir, module, task_spec, filter_conds, verb=cmdargs.verbosity)
+        status = DAU.energyScanHistoFiller(outdir, module, task_spec, filter_conds, verb=cmdargs.verbosity)
         return status
-        
+    
     @staticmethod
     def analyze(args):
         """Profiles the Channel vs ADC vs CM histogram to find pedestals to use."""
@@ -46,7 +43,7 @@ class HGCALCalPulse(HGCALCalibration):
         typecode, url, cmdargs = args
 
         hnames = ['adc','tot']
-        routput = DAU.profile3DScanHisto(url,hnames,storehists=cmdargs.addControlPlots,
+        routput = DAU.profile3DScanHisto(url,hnames,storehists=cmdargs.doControlPlots,
                                          adc_cut=180,verb=cmdargs.verbosity)
 
         #read the summary (pandas)
@@ -63,7 +60,6 @@ class HGCALCalPulse(HGCALCalibration):
     def createCorrectionsFile(self, results):
         """Final tweaks of the analysis results to export as a json file for CMSSW."""
 
-        
         correctors={}
         popts = ['adc2fC','adc0','tot2fC','tot0','totlin','a']
         for r in results:
@@ -114,5 +110,5 @@ class HGCALCalPulse(HGCALCalibration):
           
 
 if __name__ == '__main__':
-    pedestal = HGCALCalPulse()
+    scan = HGCalCalPulseScan()
     

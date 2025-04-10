@@ -1,6 +1,6 @@
 import sys
 sys.path.append("./")
-from HGCALCalibration import HGCALCalibration
+from HGCalCalibration import HGCalCalibration
 import DigiAnalysisUtils as DAU
 import HexPlotUtils as HPU
 import numpy as np
@@ -11,7 +11,7 @@ except ImportError:
   sys.path.append('./python/')
   from JSONEncoder import *
 
-class HGCALPedestals(HGCALCalibration):
+class HGCalPedestals(HGCalCalibration):
 
     def __init__(self):
         self.histofiller = self.pedestalHistoFiller
@@ -31,14 +31,15 @@ class HGCALPedestals(HGCALCalibration):
                     'zs':'HGCMetaData_trigType==4',
                     'nzs':'HGCMetaData_trigType==16'
                 }
-            rfile = DAU.scanHistoFiller(outdir, module, task_spec, filter_conds)
+            # TODO: replace energyScanHistoFiller with simpler adcScanHistoFiller ?
+            rfile = DAU.energyScanHistoFiller(outdir, module, task_spec, filter_conds)
         else:
             filter_cond = cmdargs.pedTrigger
             rfile = DAU.analyzeSimplePedestal(outdir, module, task_spec, filter_cond)
 
         return (module,rfile)
 
-    def addCommandLineOptions(self,parser):
+    def addCommandLineOptions(self, parser):
         """add specific command line options for pedestals"""
         parser.add_argument("--fromNZSsampling",
                             action='store_true',
@@ -57,9 +58,9 @@ class HGCALPedestals(HGCALCalibration):
         if '_closure' in typecode : return {}
         
         if cmdargs.fromNZSsampling:
-            pedestals_dict = HGCALPedestals.analyzeNZSsamplingResults(args)
+            pedestals_dict = HGCalPedestals.analyzeNZSsamplingResults(args)
         else:
-            pedestals_dict = HGCALPedestals.analyzeSimplePedestalResults(args)
+            pedestals_dict = HGCalPedestals.analyzeSimplePedestalResults(args)
         return pedestals_dict
 
     @staticmethod
@@ -120,4 +121,4 @@ class HGCALPedestals(HGCALCalibration):
         return jsonurl
 
 if __name__ == '__main__':
-  HGCALPedestals()
+  HGCalPedestals()

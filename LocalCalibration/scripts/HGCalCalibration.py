@@ -1,25 +1,26 @@
-import pandas as pd
-import re
-import glob
-import argparse
-import os
-from abc import ABC, abstractmethod
-import ROOT
+import os, sys
+import re, glob
 import json
+import ROOT
+ROOT.PyConfig.IgnoreCommandLineOptions = True # to avoid conflict with argparse
+import pandas as pd
+import argparse
+from abc import ABC, abstractmethod
 from multiprocessing import Pool
-import sys
+
+# import common HGCalCommissioning tools
 sys.path.append("./")
 from DigiAnalysisUtils import analyzeSimplePedestal
-from HGCALCalibTaskWrapper import submitWrappedTasks
+from HGCalCalibTaskWrapper import submitWrappedTasks
 try:
   from HGCalCommissioning.LocalCalibration.JSONEncoder import *
 except ImportError:
-  sys.path.append('./python/')
+  sys.path.append("./python/")
   from JSONEncoder import *
 
-  
-class HGCALCalibration(ABC):
-    """HGCALCalibration is a base class which can be used for procedures which make use of the NANO to fill histograms
+
+class HGCalCalibration(ABC):
+    """HGCalCalibration is a base class which can be used for procedures which make use of the NANO to fill histograms
     from where different quantities can be derived. The class will execute the analysis flow when it's `__init__` method is called
     in the following order:
     
@@ -34,73 +35,76 @@ class HGCALCalibration(ABC):
     * analyze : the method that analyzes the the histograms and build the tables of constants
     * createCorrectionsFile : the method that makes use of the results to create a file
     """
- 
-    def __init__ (self,raw_args=None):
-        """Constructor of HGCALCalibration class"""
-
-        #parse arguments and add as class attributes
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("-i", "--input", nargs='+',
-                                 help='input directory=%(default)s',
-                                 default="/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/Test/Run1743170957/c7e3e9cc-0cbd-11f0-8349-b8ca3af74182/prompt")
-        self.parser.add_argument("-o", "--output",
-                                help='output directory default=%(default)s',
-                                default='./calibrations')
-        self.parser.add_argument("--scanmap", metavar='JSON', default=None,
+    
+    def __init__(self, raw_args=None, runtype=None, scanparam=None):
+        """Constructor of HGCalCalibration class."""
+        self.runtype   = runtype
+        self.scanparam = scanparam
+        self.jsonurl   = None # final product: string to JSON file
+        
+        # parse arguments and add as class attributes
+        self.parser = argparse.ArgumentParser(prog=self.__class__.__name__)
+        self.parser.add_argument('-i', "--input", nargs='+',
+                                 default="/eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/Test/Run1743170957/c7e3e9cc-0cbd-11f0-8349-b8ca3af74182/prompt",
+                                 help="input directory=%(default)s")
+        self.parser.add_argument('-o', "--output", default='./calibrations',
+                                 help="output directory default=%(default)s")
+        self.parser.add_argument("--runtype", default=self.runtype,
+                                 help="scan/run type, default=%(default)r")
+        self.parser.add_argument("--scanparam", default=self.scanparam,
+                                 help="scan/run type, default=%(default)r")
+        self.parser.add_argument("--scanmap", metavar='JSON',
                                  help=("JSON file mapping a scan : run, directory and config parameters to use with their value"))
-        self.parser.add_argument("--moduleList",
-                                help='process only these modules (csv list) %(default)s',
-                                default='', type=str)
+        self.parser.add_argument("--moduleList", default='',
+                                 help="process only these modules (csv list) %(default)s")
         self.parser.add_argument("--task_spec",
-                                 help='process a previously created task_spec',
-                                 default=None, type=str)
-        self.parser.add_argument("--maxThreads", type=int,
-                                help='max threads to use=%(default)s',
-                                default=8)
-        self.parser.add_argument("--forceRewrite",
-                                help='force re-write of previous output=%(default)s',
-                                action='store_true')
-        self.parser.add_argument("--skipHistoFiller",
-                                 help='skip filling of the histograms=%(default)s',
-                                 action='store_true')
-        self.parser.add_argument("-v", '--verbosity', type=int, nargs='?', const=1, default=0,
-                                 help="set verbosity level" )
-        self.parser.add_argument("--doHexPlots",
-                                 action='store_true',
-                                 help='save hexplots')
+                                 help="process a previously created task_spec")
+        self.parser.add_argument("--maxThreads", type=int, default=8,
+                                 help="max threads to use=%(default)s")
+        self.parser.add_argument("--forceRewrite", action='store_true',
+                                 help="force re-write of previous output=%(default)s")
+        self.parser.add_argument("--skipHistoFiller", action='store_true',
+                                 help="skip filling of the histograms=%(default)s")
+        self.parser.add_argument("--doControlPlots", action='store_true',
+                                 help="enable control plots (if available)")
+        self.parser.add_argument("--doHexPlots", action='store_true',
+                                 help="save hexplots (if available)")
         self.parser.add_argument("--createHistoFillerTask", action='store_true',
                                  help="Create task specs but do not execute anything else")
-        self.parser.add_argument("--nosub", action='store_true', help="do not submit the histo filler task to condor (dry run)")
+        self.parser.add_argument("--nosub", action='store_true',
+                                 help="do not submit the histo filler task to condor (dry run)")
+        self.parser.add_argument('-v', '--verbosity', type=int, nargs='?', const=1, default=0,
+                                 help="set verbosity level" )
         self.addCommandLineOptions(self.parser)
         self.cmdargs = self.parser.parse_args(raw_args)
-
-        #build the list of runs to analyze
+        
+        # build the list of runs to analyze
         scanmap = {}
         if not self.cmdargs.scanmap is None:
             with open(self.cmdargs.scanmap,'r') as mapfile:
                 scanmap = json.load(mapfile)
         else:
-            scanmap["inc"] = { 'idx':0, 'input': [], 'params':{} }
+            scanmap['inc'] = { 'idx':0, 'input': [], 'params':{} }
             for i in self.cmdargs.input:
                 scanmap['inc']['input'] += glob.glob(f'{i}/NANO*.root')
-            
-        #histogram filling
+        
+        # histogram filling
         calibresults = []
         if not self.cmdargs.skipHistoFiller:
-
-            #check if upper class has defined an histogram filler
+            
+            # check if upper class has defined an histogram filler
             if not hasattr(self, 'histofiller'):
                 print('Setting base histogram filler has an attribute')
                 self.histofiller = analyzeSimplePedestal
-
-            #prepare the jobs (run info#modules, sub-samples, etc.)
+            
+            # prepare the jobs (run info#modules, sub-samples, etc.)
             self.prepareHistogramFiller(scanmap)
 
             if self.cmdargs.createHistoFillerTask:
                 submitWrappedTasks(tasks=self.histofill_tasks, classname=type(self).__name__, dryRun=self.cmdargs.nosub)
                 return
-                
-            #launch tasks and fill rootfiles
+                        
+            # launch tasks and fill rootfiles
             if self.cmdargs.maxThreads<=1: # sequential
                 for task in self.histofill_tasks:
                   calibresults.append(self.histofiller(task))
@@ -113,62 +117,65 @@ class HGCALCalibration(ABC):
                 typecode = re.findall('(.*).root',os.path.basename(url))[0]
                 calibresults.append( (typecode,url) )
             print(f'Found the following results {calibresults}')
-            
-        #analysis of histograms will proceed only if not executing pre-filled task_specs
-        #in that case the execution was probably carried by task splitting and needs to be hadded
+        
+        # analysis of histograms will proceed only if not executing pre-filled task_specs
+        # in that case the execution was probably carried by task splitting and needs to be hadded
         if not self.cmdargs.task_spec is None:
             print('As results of pre-filled task_specs are probably executed in chunks in HTCondor will stop here')
             print('Please hadd the Chunks and re-run with --skipHistoFiller option')
             return
-
-        #analyze histogras
+        
+        # analyze histogras
         tasklist = [ (typecode, url, self.cmdargs) for (typecode,url) in calibresults ]
+        if len(self.cmdargs.moduleList)>0: # filter again
+            tasklist = [ x for x in tasklist if x[0] in self.cmdargs.moduleList]
         with Pool(self.cmdargs.maxThreads) as p:
             results = p.map(self.analyze, tasklist)            
-
-        #create the corrections based on the analysis results
-        jsonurl = self.createCorrectionsFile(results)
-        print(f'Corrections stored in {jsonurl}')
-
-
+        
+        # create the corrections based on the analysis results
+        self.jsonurl = self.createCorrectionsFile(results)
+        print(f'Corrections stored in {self.jsonurl}')
+        
+    
     @abstractmethod
-    def addCommandLineOptions(parser : argparse.ArgumentParser):
+    def addCommandLineOptions(self, parser : argparse.ArgumentParser):
         pass
-
-
+        
+    
     @staticmethod
     @abstractmethod
     def analyze(args):
         pass
-
-
+        
+    
     @abstractmethod
     def createCorrectionsFile(results : list) -> str:
         pass
-
-
+        
+    
     def prepareHistogramFiller(self, scanmap : dict):
         """
         Steers preparation of the analysis for a run
         scanmap : dict = { 'key' : str : { 'idx' : int, 'input' : list of NANO, 'params' :dict }
         """
 
-        #if a task spec is given use it directly
+        # if a task spec is given use it directly
         if not self.cmdargs.task_spec is None:
             print('Using already existing task_spec')
             os.makedirs(self.cmdargs.output, exist_ok=True)
             self.histofill_tasks = [ (self.cmdargs.output, self.cmdargs.moduleList, self.cmdargs.task_spec, self.cmdargs), ]
             return
 
-        #if not go through the whole procedure
-        #prepare output
+        # if not go through the whole procedure
+        # prepare output
         if os.path.isdir(self.cmdargs.output) and not self.cmdargs.forceRewrite:
             raise ValueError(f'Output directory {self.cmdargs.output} already exists')        
         os.makedirs(self.cmdargs.output + '/histofiller', exist_ok=True)
-        
-        #create tasks
+
+        # create tasks
         self.histofill_tasks = self.buildHistoFillerTasks(scanmap)
         
+    
     def buildScanParametersDict(self, file_list : list, module_list : list, nano_patt : str = 'Run(\d+)/(.*)/(.*)/NANO_(\d+)_(\d+).root') -> dict:
         """
         If the user passes a JSON via command line option --runmap, this default implementation will use
@@ -177,14 +184,13 @@ class HGCALCalibration(ABC):
         Return lists of scanned parameters.
         """
 
-        #read relay map
+        # read relay map
         if self.cmdargs.scanmap is None:
             return { }
         with open(self.cmdargs.scanmap,'r') as mapfile:
           scanmap = json.load(mapfile)
 
-
-        #build the sequential list of scan parameters
+        # build the sequential list of scan parameters
         scanparams_list = []
         for i, fname in enumerate(file_list):
 
@@ -206,24 +212,25 @@ class HGCALCalibration(ABC):
             scanparams_list.append( scanparams )
             
         return scanparams_list
-
-
+        
+    
     def buildHistoFillerTasks(self, scanmap : dict) -> list:
-        """for each module which needs to processed independently a task is created and described in a json file
-        the format of the json file is analogous to that proposed in 
+        """
+        For each module which needs to processed independently a task is created and described in a json file.
+        The format of the json file is analogous to that proposed in
         https://root.cern/doc/master/classROOT_1_1RDF_1_1Experimental_1_1RDatasetSpec.html
-        it returns a list of tuples containing the following information
+        It returns a list of tuples containing the following information:
         (outputdirectory, module name, json used to define the RDataFrame,commandline arguments)
         """
 
         task_list = []
 
-        #get modules
+        # get modules
         first_key = list(scanmap.keys())[0]
         first_file = scanmap[first_key]['input'][0]
         modules = self.getModulesFromRun(first_file)
 
-        #with all the information create a task per module
+        # with all the information create a task per module
         for m, (fed,seq,nerx) in modules.items():
 
             task_spec={'samples':{}}
@@ -246,61 +253,61 @@ class HGCALCalibration(ABC):
                     }
                 }
 
-            #save json 
+            # save json 
             outjson = f"{self.cmdargs.output}/histofiller/{m}.json"
             saveAsJson(outjson,task_spec)
             task_list.append( (self.cmdargs.output + '/histofiller', m, outjson, self.cmdargs) )
 
-        #return the location of the tasks
+        # return the location of the tasks
         return task_list
-
-
+        
+    
     def getModulesFromRun(self, f : str) -> dict:
-        """reads the run tree and builds a dict of {typecode: (fedId,Seq), ...} """
+        """Reads the run tree and builds a dict of {typecode: (fedId,Seq), ...}."""
 
         modules_dict = {}
         runs = ROOT.RDataFrame("Runs",f).AsNumpy()
         for k,v in runs.items():
 
-            #select typecode branches
+            # select typecode branches
             if k.find('HGCTypeCodes')!=0 : continue
             module_typecode = k.replace('HGCTypeCodes_','')
 
-            #skip if the module is not required
+            # skip if the module is not required
             if len(self.cmdargs.moduleList)>0 and not module_typecode in self.cmdargs.moduleList:
                 continue
                         
-            #save the required information
+            # save the required information
             module_idx = v[0][0]
             module_fed = runs['HGCReadout_FED'][0][module_idx]
             module_seq = runs['HGCReadout_Seq'][0][module_idx]
             if 'HGCReadout_nErx' in runs:
                 module_nerx = runs['HGCReadout_nErx'][0][module_idx]
             else:
-                #remove once all NANO has this
+                # remove once all NANO has this
                 print(f'Using default nErx for {module_typecode}') 
                 module_nerx =  6
             modules_dict[module_typecode] = (module_fed,module_seq,module_nerx)
              
         return modules_dict
-
-
+        
+    
     @staticmethod
     def xrootdFileName(f):    
-        '''prepends the xrootd string to the file name'''
-
+        """Prepends the xrootd string to the file name."""
         if f.find('/eos/user')==0:
             return 'root://eosuser.cern.ch/'+f
         elif f.find('/eos/cms')==0:
             return 'root://eoscms.cern.ch/'+f
         return f
-
-
+        
+    
     @staticmethod
     def pdg_id(self, particle_name):
-        '''Method to return the Particle ID following the PDG nomenclature'''
+        """Method to return the Particle ID following the PDG nomenclature."""
         if particle_name=='e': pdgId=11
         if particle_name=='mu': pdgId=13
         if particle_name=='pi': pdgId=211
         else: pdgId=0
         return pdgId        
+    

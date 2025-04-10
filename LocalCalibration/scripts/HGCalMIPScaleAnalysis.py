@@ -1,6 +1,6 @@
 import sys
 sys.path.append("./")
-from HGCALCalibration import HGCALCalibration
+from HGCalCalibration import HGCalCalibration
 import DigiAnalysisUtils as DAU
 import HexPlotUtils as HPU
 import numpy as np
@@ -15,7 +15,7 @@ except ImportError:
   sys.path.append('./python/')
   from JSONEncoder import *
 
-class HGCALMIPScaleAnalysis(HGCALCalibration):
+class HGCalMIPScaleAnalysis(HGCalCalibration):
 
     """
     MIP scale analysis is a class used to fill histograms which can be useful to extract the 
@@ -113,12 +113,12 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
 
         #determine trigger time range of the analysis
         ttimeran = [float(x) for x in cmdargs.trigTimeRan.split(',')]
-        moderan, coi_trigtime = HGCALMIPScaleAnalysis.findBestTrigTimePerChannel(en)
+        moderan, coi_trigtime = HGCalMIPScaleAnalysis.findBestTrigTimePerChannel(en)
         if ttimeran[0]<0 : ttimeran[0]=moderan[0]
         if ttimeran[1]<0 : ttimeran[1]=moderan[1]
 
         #run mip fits
-        mipfitreport = HGCALMIPScaleAnalysis.runMIPFits(en,*ttimeran,cmdargs.rebinForFit)
+        mipfitreport = HGCalMIPScaleAnalysis.runMIPFits(en,*ttimeran,cmdargs.rebinForFit)
         mipfitreport['Typecode'] = typecode
 
         #save histograms to ROOT file
@@ -286,5 +286,5 @@ class HGCALMIPScaleAnalysis(HGCALCalibration):
 
 if __name__ == '__main__':
     
-    mipscale = HGCALMIPScaleAnalysis()
+    mipscale = HGCalMIPScaleAnalysis()
     
