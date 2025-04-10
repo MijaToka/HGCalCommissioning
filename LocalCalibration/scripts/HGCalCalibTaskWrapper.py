@@ -5,7 +5,7 @@ import json
 import argparse
 import subprocess
 
-def submitWrappedTasks(tasks : list, classname : str = 'HGCALCalPulse', dryRun : bool = False):
+def submitWrappedTasks(tasks : list, classname : str = 'HGCalCalPulse', dryRun : bool = False):
 
     """
     this function receives a list of tasks defined by a calibration task and puts them in a condor file to be submitted
@@ -48,7 +48,7 @@ def submitWrappedTasks(tasks : list, classname : str = 'HGCALCalPulse', dryRun :
 
 def createHTCondorJDL(classname : str, subtaskdesc : str, index_list : list = [-1]):
 
-    """creates a HTCondor JDL to call HGCALCalibTaskWrapper for each index in the list"""
+    """creates a HTCondor JDL to call HGCalCalibTaskWrapper for each index in the list"""
     
     condorout = subtaskdesc.replace('.json','_condor.sub')
     jobsdir = os.path.dirname(condorout)
@@ -79,7 +79,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--script",
                         help='the script to run (expected inside HGCalCommissioning/LocalCalibration/scripts)=%(default)s',
-			default="HGCALCalPulse.py")
+			default="HGCalCalPulse.py")
     parser.add_argument("-j", "--json",
                         help='the json file describing the command line arguments to execute=%(default)s',
 			default=None)

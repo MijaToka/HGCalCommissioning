@@ -25,5 +25,5 @@ eval `scramv1 runtime -sh`
 echo "CMSSW_BASE is ${CMSSW_BASE}"
 
 #execute task
-python3 scripts/HGCALCalibTaskWrapper.py -j $TASKSPEC -s $WORKFLOW --idx $INDEX
+python3 scripts/HGCalCalibTaskWrapper.py -j $TASKSPEC -s $WORKFLOW --idx $INDEX
 cd -      

@@ -1,13 +1,13 @@
 import sys
 sys.path.append("./")
-from HGCALCalibration import HGCALCalibration
+from HGCalCalibration import HGCalCalibration
 import DigiAnalysisUtils as DAU
 import HexPlotUtils as HPU
 import numpy as np
 import json
 import ROOT
 
-class HGCALPedestalsClosure(HGCALCalibration):
+class HGCalPedestalsClosure(HGCalCalibration):
 
     def __init__(self):
         self.histofiller = self.histoFillerForClosure
@@ -54,7 +54,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
             nrocs = int(nerx/2)
             
         #adjust binning from the extremes
-        minirdf = HGCALPedestalsClosure.definePedestalsClosureRDF(task_spec)
+        minirdf = HGCalPedestalsClosure.definePedestalsClosureRDF(task_spec)
         minirdf = minirdf.Range(1000)
         obslist = ['en', 'cm2', 'dsen', 'asen']
         obsbounds  = [minirdf.Min(x) for x in obslist]
@@ -86,7 +86,7 @@ class HGCALPedestalsClosure(HGCALCalibration):
         print(f'Bins determined from sub-sample: {bindefs}')
         
         #fill the histograms with full statistics
-        rdf = HGCALPedestalsClosure.definePedestalsClosureRDF(task_spec)
+        rdf = HGCalPedestalsClosure.definePedestalsClosureRDF(task_spec)
         profiles = [
             rdf.Histo3D(("envscm",    ';Channel;RecHit energy;CM2',*bindefs['ch'],   *bindefs['cm2'],   *bindefs['en']), "ch", "cm2", "en"),
             rdf.Histo2D(("nchperroc", ';ROC;#channels used',       *bindefs['rocs'], *bindefs['rocch']), "rocidx", "nchperroc"),
@@ -176,4 +176,4 @@ class HGCALPedestalsClosure(HGCALCalibration):
 
 if __name__ == '__main__':
 
-    pedestalclosure = HGCALPedestalsClosure()
+    pedestalclosure = HGCalPedestalsClosure()

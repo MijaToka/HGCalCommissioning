@@ -1,10 +1,16 @@
 import ROOT
 import os
+import re
 import itertools
 import json
 import gzip
-import re
 import pandas as pd
+try:
+  from HGCalCommissioning.LocalCalibration.mapping import getFEChannelIndex
+except ImportError:
+  sys.path.append('./python/')
+  from mapping import getFEChannelIndex
+
 
 def defineDigiDataFrameFromSpecs(specs, attachProgressBar=True, ix_filter_cond='ix>=0'):
     """defines the dataframe to be used for the analysis of DIGIs in NANOAOD
@@ -155,7 +161,92 @@ def analyzeSimplePedestal(outdir, module, task_spec, filter_cond : str = ''):
     return rfile
 
     
-def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
+def adcScanHistoFiller(args):
+     """
+     Common histofiller method for scans that only need ADC profile, e.g. for trimming, VRef, etc.
+     """
+     outdir, module, task_spec, cmdargs = args
+     
+     ix_filt = -1
+     if ':' in task_spec:
+         task_spec, ix_filt = task_spec.split(':')
+     
+     # read #pts and #eRx from first task
+     with open(task_spec) as json_data:
+         samples = json.load(json_data)['samples']
+     runtype = samples['data1']['metadata']['type'] # automatically recognize scan type]
+     npts = max(d['metadata']['index'] for s, d in samples.items())
+     nerx = samples['data1']['metadata']['nerx']
+     nch = nerx*37
+     
+     # fill a histo with the scan info
+     ptbins = (npts,0.5,npts+0.5) # scan points
+     scanInfoHist = ROOT.TH2F('scaninfo', f"{runtype} info;Scan point;Parameters", *ptbins, 3,0,3)
+     scanInfoHist.GetYaxis().SetBinLabel(1,'ScanPoint')
+     scanInfoHist.GetYaxis().SetBinLabel(2,cmdargs.scanparam)
+     scanInfoHist.GetYaxis().SetBinLabel(3,'nFiles')
+     for key, sample in samples.items(): # loop over scan points
+         idx    = sample['metadata']['index']
+         parval = sample['metadata'][cmdargs.scanparam]
+         flist  = sample['files']
+         scanInfoHist.SetBinContent(idx,1,idx)
+         scanInfoHist.SetBinContent(idx,2,int(parval))
+         scanInfoHist.SetBinContent(idx,3,len(flist))
+     
+     # prepare RDF
+     rdf = ROOT.RDF.Experimental.FromSpec(task_spec)
+     ROOT.RDF.Experimental.AddProgressBar(rdf)
+     ix_filter_cond='ix>=0' if ix_filt==-1 else f'ix=={ix_filt}'
+     rdf = rdf.DefinePerSample('ix', 'rdfsampleinfo_.GetI("index")') \
+          .Filter(ix_filter_cond) \
+          .DefinePerSample('target_module_fed', 'rdfsampleinfo_.GetI("fed")') \
+          .DefinePerSample('target_module_seq', 'rdfsampleinfo_.GetI("seq")') \
+          .Define('target_module', 'HGCDigi_fedId==target_module_fed && HGCDigi_fedReadoutSeq==target_module_seq') \
+          .Define('good_digiadc',  'HGCDigi_flags!=0xFFFF && HGCDigi_tctp<3') \
+          .Define('maskadc',       'good_digiadc & target_module') \
+          .Define('chadc',         'HGCDigi_channel[maskadc]') \
+          .Define('chtypeadc',     'HGCDigi_chType[maskadc]') \
+          .Define('adc',           'HGCDigi_adc[maskadc]') \
+          .Define('modulecm',      'HGCDigi_cm[maskadc]/2') \
+          .Filter('Sum(maskadc)>0')
+     
+     # add the profile
+     chbins  = (nch,-0.5,nch-0.5)
+     graphlist = [
+       rdf.Profile2D(('adcprofile',      f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'adc'),
+       rdf.Profile2D(('modulecmprofile', f"{module};Scan point;Channel;<ADC>", *ptbins, *chbins), 'ix', 'chadc', 'modulecm'),
+       rdf.Profile1D(('chType',          f"{module};Channel;Channel Type", *chbins), 'chadc', 'chtypeadc')
+     ]
+     
+     # fill profiles
+     ROOT.RDF.RunGraphs(graphlist)
+     
+     # results (convert to TH1 objects)
+     histolist = [scanInfoHist] + [obj.GetValue() for obj in graphlist]
+     
+     # add injected channel map (channel index vs. scan point)
+     # NOTE: the channel index used by the FE is converted to the index in the readout sequence
+     if 'InjChans' in samples['data1']['metadata']:
+         chTypes  = [h for h in histolist if h.GetName()=="chType"][0] # 0: calib, 1: normal, 2: CM
+         isHD     = (nerx==12) # swap e-Rx inside each HGCROC
+         injChansMap = ROOT.TH2S('injChansMap', f"Injected channel map;Scan point;Channel", *ptbins, *chbins)
+         chanMap  = [(c,cf) for c in range(nch) if (cf:=getFEChannelIndex(c,chTypes,isHD=isHD))>=0]
+         for key, sample in samples.items(): # loop over scan points
+             idx = sample['metadata']['index'] # scan point index
+             injChans = [int(c) for c in sample['metadata']['InjChans'].split(',')] # RDF FromSpec cannot handle a list
+             for ich, ich_fe in chanMap:
+                 if ich_fe in injChans:
+                     injChansMap.SetBinContent(idx,ich+1,1)
+         histolist.append(injChansMap)
+     
+     # store
+     postfix = '' if ix_filt==-1 else f'_ix{ix_filt}'
+     rfile = f'{outdir}/{module}{postfix}.root'
+     fillHistogramsAndSave(histolist=histolist, rfile=rfile)
+     return (module,rfile)
+
+
+def energyScanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     """
     A base method to fill histograms in a scan (each sub-task in task_spec) is treated as a scan point
     filter_conds is a dict used to define different sub-samples for which the histos will be filled
@@ -174,7 +265,7 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     nch = nerx*37
     scantype = samples['data1']['metadata']['type'] # automatically recognize scan type
     if verb>=2:
-        print(f"scanHistoFiller: scantype={scantype}, npts={npts}, nerx={nerx}, nch={nch}")
+        print(f"energyScanHistoFiller: scantype={scantype}, npts={npts}, nerx={nerx}, nch={nch}")
     
     # fill a histo with the scan info
     ptbins = (npts,0.5,npts+0.5) # scan points
@@ -189,7 +280,7 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
             run, ls = run_rexp.findall(sample['files'][0])[0]
             scanInfoHist.SetBinContent(idx,1,int(run))
             scanInfoHist.SetBinContent(idx,2,int(ls))
-    elif scantype=='HGCALCalPulse': # scan over charge injection points ('CalPulseVal')
+    elif scantype=='HGCalCalPulse': # scan over charge injection points ('CalPulseVal')
         infobins = (5,0,5)
         scanInfoHist = ROOT.TH2F('scaninfo', "Scan info;Scan point;Parameters", *ptbins, *infobins)
         scanInfoHist.GetYaxis().SetBinLabel(1,'Run')
@@ -203,7 +294,7 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
             gain = sample['metadata']['gain'] # gain
             run, ls = run_rexp.findall(sample['files'][0])[0]
             if verb>=2:
-                print(f"scanHistoFiller: mod={module} idx={idx}, run={run}, ls={ls}, injq={injq}, files={sample['files']}")
+                print(f"energyScanHistoFiller: mod={module} idx={idx}, run={run}, ls={ls}, injq={injq}, files={sample['files']}")
             scanInfoHist.SetBinContent(idx,1,int(run))
             scanInfoHist.SetBinContent(idx,2,int(ls))
             scanInfoHist.SetBinContent(idx,3,int(injq))
@@ -243,6 +334,7 @@ def scanHistoFiller(outdir, module, task_spec, filter_conds: dict, verb: int=0):
     rfile = f'{outdir}/{module}{postfix}.root'
     fillHistogramsAndSave(histolist = histolist, rfile = rfile)    
     return rfile
+
 
 def fillHistogramsAndSave(histolist : list, rfile : str):
     """saves list of histograms in ROOT file"""
@@ -293,7 +385,7 @@ def profile3DHisto(url, hname):
 
 def profile3DScanHisto(infname, hnames, storehists=True, adc_cut=180, verb=0):
     """
-    This method analyzes a 3D histogram created by scanHistoFiller.
+    This method analyzes a 3D histogram created by energyScanHistoFiller.
     """
     if verb>=1:
       print(f"profile3DScanHisto: fname={infname}, hnames={hnames}")

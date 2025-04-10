@@ -1,12 +1,12 @@
 # Author: Izaak Neutelings (November 2024)
 # Instructions:
-#   python3 scripts/HGCALTrigTimeAnalysis.py -r 1727204018 -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/
-#   python3 scripts/HGCALTrigTimeAnalysis.py -r 1727204018 -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/ --skipHistoFiller
-#   for r in 1727206292 1727204018; do for k in 3 4 5; do python3 scripts/HGCALTrigTimeAnalysis.py -r $r -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/ --skipHistoFiller --krms $k; done; done
+#   python3 scripts/HGCalTrigTimeAnalysis.py -r 1727204018 -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/
+#   python3 scripts/HGCalTrigTimeAnalysis.py -r 1727204018 -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/ --skipHistoFiller
+#   for r in 1727206292 1727204018; do for k in 3 4 5; do python3 scripts/HGCalTrigTimeAnalysis.py -r $r -i /eos/cms/store/group/dpg_hgcal/tb_hgcal/2024/hgcalrd/SepTB2024/ --skipHistoFiller --krms $k; done; done
 import os, sys
 sys.path.append("./")
 import re
-from HGCALMIPScaleAnalysis import HGCALMIPScaleAnalysis
+from HGCalMIPScaleAnalysis import HGCalMIPScaleAnalysis
 from plotTrigTime import makeTrigTimeWindow
 from HGCalCommissioning.LocalCalibration.plot.wafer import fill_wafer_hist
 from HGCalCommissioning.LocalCalibration.plot.utils import setstyle, makehist, makegraph, copytdir, makeHistComparisonCanvas
@@ -94,7 +94,7 @@ def insertlist(oldlist,newlist,element):
     
     
 
-class HGCALTrigTimeAnalysis(HGCALMIPScaleAnalysis):
+class HGCalTrigTimeAnalysis(HGCalMIPScaleAnalysis):
     """
     Study of trig phase to optimize window for MIP scale analysis.
     """
@@ -433,7 +433,7 @@ class HGCALTrigTimeAnalysis(HGCALMIPScaleAnalysis):
         print(f">>> Automatically recognized window for trigger phase of {typecode!r}: {moderan}")
         
         # create ROOT file
-        postfix = HGCALTrigTimeAnalysis.getpostfix(cmdargs)
+        postfix = HGCalTrigTimeAnalysis.getpostfix(cmdargs)
         rooturl = os.path.join(cmdargs.output,f'trigstudy_{typecode}.root')
         
         # write general histograms
@@ -460,7 +460,7 @@ class HGCALTrigTimeAnalysis(HGCALMIPScaleAnalysis):
             os.makedirs(plotdir,exist_ok=True)
             tdir = outfile.mkdir('plots')
             tdir.cd()
-            plots = HGCALTrigTimeAnalysis.plotHex(typecode,outhists,tdir=tdir,outdir=plotdir,postfix=postfix)
+            plots = HGCalTrigTimeAnalysis.plotHex(typecode,outhists,tdir=tdir,outdir=plotdir,postfix=postfix)
         
         # all done
         outfile.Close()
@@ -550,5 +550,5 @@ class HGCALTrigTimeAnalysis(HGCALMIPScaleAnalysis):
 
 
 if __name__ == '__main__':
-    trigstudy = HGCALTrigTimeAnalysis()
+    trigstudy = HGCalTrigTimeAnalysis()
     

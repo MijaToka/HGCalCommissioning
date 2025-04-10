@@ -59,7 +59,7 @@ rule step_PEDESTALS:
         # Pedestal analysis
         #
 	echo "Running pedestals" > {log}
-        python3 scripts/HGCALPedestals.py -i {params.nanodir} -o {params.calibout} --forceRewrite
+        python3 scripts/HGCalPedestals.py -i {params.nanodir} -o {params.calibout} --forceRewrite
                 
         #
         # CMSSW L0 calib file
@@ -73,9 +73,9 @@ rule step_PEDESTALS:
         #
         for f in 0 3; do
             echo "Generating ECON-D ZS for f=${{f}}"  >> {log}
-            python3 scripts/HGCALECONDZS.py  -i {params.calibout}/pedestals.json --mipSF 0 \
+            python3 scripts/HGCalECONDZS.py  -i {params.calibout}/pedestals.json --mipSF 0 \
                 --P_CM_correction True  -F ${{f}} -o {params.calibout}/pedestals_econzsreg_P_N${{f}}_CM.json;
-            python3 scripts/HGCALECONDZS.py -i {params.calibout}/pedestals.json --mipSF 0 \
+            python3 scripts/HGCalECONDZS.py -i {params.calibout}/pedestals.json --mipSF 0 \
                 --onlyPedestals True  -F ${{f}} -o {params.calibout}/pedestals_econzsreg_P_N${{f}}.json;
         done
 
