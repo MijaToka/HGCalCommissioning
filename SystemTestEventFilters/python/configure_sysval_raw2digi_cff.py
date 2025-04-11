@@ -24,7 +24,6 @@ def setArgParserForRAW2DIGI(options : VarParsing):
 def configureRAW2DIGIStep(process, options, eraConfig : dict):
     
     # get the options
-
     run = options.run
     lumi = options.lumi
     era = options.era

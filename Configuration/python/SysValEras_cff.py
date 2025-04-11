@@ -32,7 +32,7 @@ def findAppropriateCalib(run : int, calib_dict : dict) -> dict:
     return refrun, calib_dict[refrun]
 
 
-def getEraConfiguration(era : str, run : int) -> dict :
+def getEraConfiguration(era : str, run : int, calibfile : Union[str, None] = None) -> dict :
     """gets the appropriate configuration to use from the eras dict
     run is used to fine tune the calibration and configurations used
     """
@@ -49,12 +49,18 @@ def getEraConfiguration(era : str, run : int) -> dict :
     if not setup in _SysValCalibs:
         raise ValueError(f'Setup {setup} is not found in calibrations')
 
-    refrun, calib = globals()[f'CustomCalibs_{setup}'](run)
-    if refrun is None:
-        print('No pre-defined reference run: falling back on timestamp based references') 
-        refrun, calib = findAppropriateCalib(run=run, calib_dict=_SysValCalibs[setup])
-    print(f'Reference run is {refrun}')
-
+    if calibfile is None:
+        refrun, calib = globals()[f'CustomCalibs_{setup}'](run)
+        if refrun is None:
+            print('No pre-defined reference run: falling back on timestamp based references') 
+            refrun, calib = findAppropriateCalib(run=run, calib_dict=_SysValCalibs[setup])
+        print(f'Reference run is {refrun}')
+    else:
+        refrun = run
+        calib = {'modcalib': calibfile}
+        print(f'Overriding calib with commandline-based file refrun={run}')
+        print(calib)
+        
     cfg = _SysValEras[setup][version].copy()
     cfg.update(calib)
     cfg['ReferenceRun'] = refrun
@@ -63,10 +69,12 @@ def getEraConfiguration(era : str, run : int) -> dict :
 
 
 def initSysValCMSProcess(procname : str, era : str, run : int, maxEvents : int = -1,
-                         modulemapper : Union[str, None] = None, nthreads : int = 1) -> (cms.Process, dict):
+                         modulemapper : Union[str, None] = None,
+                         calibfile : Union[str,None] = None,
+                         nthreads : int = 1) -> (cms.Process, dict):
     """Common declarations for sysval tests: geometry is dummy, it's just the latest"""
 
-    eraConfig = getEraConfiguration(era=era, run=run)
+    eraConfig = getEraConfiguration(era=era, run=run, calibfile=calibfile)
 
     # INIT PROCESS
     from Configuration.Eras.Era_Phase2C17I13M9_cff import Phase2C17I13M9 as Era_Phase2

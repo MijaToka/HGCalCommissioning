@@ -9,10 +9,11 @@ import ROOT
 
 class HGCalPedestalsClosure(HGCalCalibration):
 
-    def __init__(self):
+    def __init__(self, raw_args=None):
+        
         self.histofiller = self.histoFillerForClosure
         ROOT.gInterpreter.Declare('#include "interface/helpers.h"')
-        super().__init__()
+        super().__init__(raw_args)
 
     @staticmethod
     def definePedestalsClosureRDF(task_spec):
@@ -35,7 +36,6 @@ class HGCalPedestalsClosure(HGCalCalibration):
                 .Define('asen',          f'sumOverRoc(ch,en,3)') \
                 .Define('modulecm',      'HGCDigi_cm[maskhit]') \
                 .Define('cm2',           'commonMode(modulecm,2)')
-        #.Filter('HGCMetaData_trigType==4')
 
         return rdf
     
@@ -110,6 +110,9 @@ class HGCalPedestalsClosure(HGCalCalibration):
         
     def addCommandLineOptions(self,parser):
         parser.set_defaults(output='calibrations_closure')
+        self.parser.add_argument("-p", "--pedestals", type=str,
+                                 help='original pedestals file',
+                                 default=None, required=True)
 
     @staticmethod
     def analyze(args):
@@ -127,17 +130,9 @@ class HGCalPedestalsClosure(HGCalCalibration):
         en_rms = np.array(results['Z_rms'])
         rho = np.array(results['YZ_rho'])
         noslope = np.zeros_like(rho)
-
-        cor_values = {
-            'Typecode' : typecode.replace('_','-'),
-            'En_ped'   : en_loc.tolist(),
-            'En_rms'   : en_rms.tolist(),
-        }
-
         isvalid = (cm_rms>1e-3)
-        cor_values['CM_slope'] = -5*np.ones_like(en_loc)
-        np.divide(rho*en_rms, cm_rms, out=cor_values['CM_slope'], where=isvalid)
-        cor_values['CM_slope'] = cor_values['CM_slope'].tolist()
+        cm_slope =  -5*np.ones_like(en_loc)
+        np.divide(rho*en_rms, cm_rms, out=cm_slope, where=isvalid)
         
         #fraction of coherent noise per roc
         nch = np.array(DAU.profile2DHisto(url,'nchperroc')['Y_mean'])
@@ -147,33 +142,62 @@ class HGCalPedestalsClosure(HGCalCalibration):
         delta2 = dsum_rms**2 - asum_rms**2
         coh_noise = np.sign(delta2)*np.sqrt( np.abs(delta2) ) / nch
         cnf = coh_noise/inc_noise
-        cor_values['Inc_noise'] = np.ravel( [ np.ones(74)*x for x in inc_noise] ).tolist() 
-        cor_values['Coh_noise'] = np.ravel( [ np.ones(74)*x for x in coh_noise] ).tolist() 
-        cor_values['CNF'] = np.ravel( [ np.ones(74)*x for x in cnf ] ).tolist()
 
-        return cor_values
+        results = {
+            'Typecode' : typecode.replace('_','-'),
+            'hit_ped'  : en_loc.tolist(),
+            'hit_rms'  : en_rms.tolist(),
+            'hit_cm_slope' : cm_slope.tolist(),
+            'inc_Noise' :  np.ravel( [ np.ones(2)*x for x in inc_noise] ).tolist(),
+            'coh_Noise' : np.ravel( [ np.ones(2)*x for x in coh_noise] ).tolist(),
+            'cnf' : np.ravel( [ np.ones(2)*x for x in cnf] ).tolist()
+        }
+
+        return results
 
 
     def createCorrectionsFile(self, results):
         
         """ final tweaks of the analysis results to export as a json file for CMSSW """
 
-        jsonurl = f'{self.cmdargs.output}/pedestalsclosure.json'
-        correctors={}
+        #load original pedestals file and add the closure information to it
+        with open(self.cmdargs.pedestals,'r') as stream:
+            pedestals = json.load(stream)            
         for r in results:
             if not 'Typecode' in r : continue
-            typecode = r.pop('Typecode')
-            correctors[typecode]=r
-        with open(jsonurl,'w') as outfile:
-            json.dump(correctors,outfile,sort_keys=False,indent=2)
+            typecode = r.pop('Typecode').replace('-','_')
+            pedestals[typecode].update(r)
 
-        if self.cmdargs.doHexPlots:
-            rooturl = f'{self.cmdargs.output}/pedestalsclosure_hexplots.root'
-            HPU.createCalibHexPlotSummary(jsonurl,rooturl)
+        jsonurl = self.cmdargs.pedestals.replace('.json','_with_closure.json')
+        with open(jsonurl,'w') as outfile:
+            json.dump(pedestals,outfile,sort_keys=False,indent=2)
             
         return jsonurl
 
 
 if __name__ == '__main__':
 
-    pedestalclosure = HGCalPedestalsClosure()
+    import argparse
+    import os
+    
+    #as this script is not strictly used for calibration and only requires a NANO file, the arguments are parsed directly
+    #to build a scan map directly so that HGCALCalibration can proceed directly
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input",     help='input NANO file',             default=None, type=str, required=True)
+    parser.add_argument("-p", "--pedestals", help='pedestals file being tested', default=None, type=str, required=True)
+    parser.add_argument("-o", "--output",    help='output directory (same as pedestals if not specified)', default=None, type=str)
+    args = parser.parse_args()
+
+    #output (same as pedestals file)
+    output = os.path.dirname(args.pedestals) if args.output is None else args.output
+    os.makedirs(output,exist_ok=True)
+        
+    #encapsulate input as a scanmap    
+    scanmap = { "closure": { "idx":0, "input": [args.input], "params":{} } }
+    scanmap_url = f'{output}/scanmap.json'
+    with open(scanmap_url,'w') as outfile:
+            json.dump(scanmap,outfile,sort_keys=False,indent=2)
+
+    #call closure
+    raw_args = ['--scanmap', scanmap_url, '-o', output, '-p', args.pedestals, '--forceRewrite', '--skipHistoFiller']
+    pedestalclosure = HGCalPedestalsClosure(raw_args)
