@@ -1,8 +1,12 @@
 import FWCore.ParameterSet.Config as cms
 from FWCore.ParameterSet.VarParsing import VarParsing
 
-def setArgParserForNANO(options : VarParsing, skipRecHitsDefault : bool = False):
-    """sets the options needed to parse commandline arguments for the RAW2DIGI step"""
+def setArgParserForNANO(options : VarParsing, skipRecHitsDefault : bool = False, outputDefault : str = 'NANO.root'):
+    
+    """sets the options needed to parse commandline arguments for the NANO step"""
+
+    options.output = outputDefault
+
     if not options.has_key('era'):
         options.register('era', None, VarParsing.multiplicity.singleton, VarParsing.varType.string,
                          "reconstruction era")
@@ -74,7 +78,7 @@ def configureNANOStep(process, options, maxThreads : int = 4):
                                                  dataTier = cms.untracked.string('NANOAOD'),
                                                  filterName = cms.untracked.string('')
                                              ),
-                                             fileName = cms.untracked.string('NANO.root'),
+                                             fileName = cms.untracked.string(options.output),
                                              outputCommands = process.NANOAODEventContent.outputCommands
                                              )
     

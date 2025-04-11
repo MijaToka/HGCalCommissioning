@@ -40,7 +40,8 @@ rule step_SCRAM:
 rule step_RAW2DIGI:
     params:
         **common_params,
-        cfg = "HGCalCommissioning/Configuration/test/step_RAW2DIGI.py"
+        cfg = "HGCalCommissioning/Configuration/test/step_RAW2DIGI.py",
+        extra = ""
     log:
         "step_RAW2DIGI.log"
     input: 
@@ -54,7 +55,7 @@ rule step_RAW2DIGI:
         cmsRun -j FrameworkJobReport_RAW2DIGI.xml $CMSSW_BASE/src/{params.cfg} \
                 run={params.run} lumi={params.lumi} era={params.era} \
                 files={params.inputFiles} inputTrigFiles={params.inputTrigFiles} yamls={params.yamls} \
-                output={output} maxEvents=${{maxEvents}}
+                output={output} maxEvents=${{maxEvents}} {params.extra}
         #CMSSW appends numEvents to the file name if maxEvents!=-1
         #force the file name to be always the same
         if [ "$maxEvents" != "-1" ]; then

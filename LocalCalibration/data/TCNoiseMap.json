@@ -1,0 +1,11 @@
+{
+    "ADC_rms":{
+	"Type":"HALFwise",
+	"Path":"DigitalHalf/<HALF>/Adc_TH",
+	"ReductionMethod":"GetNoiseThreshold"
+    },
+    "ADC_ped":{
+	"Type":"CHANNELwise",
+	"Path":"<CHTYPE>/<CH>/Adc_pedestal"
+    }    
+}
