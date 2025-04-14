@@ -1,5 +1,5 @@
 
 import numpy as np
 
-def GetNoiseThreshold(vals):
-    return 3.0 * np.mean(vals)
+def GetNoiseThreshold(vals, Nstddev=3.0):
+    return Nstddev * np.mean(vals)

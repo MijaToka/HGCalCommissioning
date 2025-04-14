@@ -23,7 +23,7 @@ def edit_key(key, half=None, channel=None, chType=None):
 
 
 class ChipParameter():
-    def __init__(self, name, path, grouped_values, reduction_method=None):
+    def __init__(self, name, path, grouped_values, reduction_method=None, reduction_method_args={}):
         self.name=name
         self.path=path.split('/')
         self.values={}
@@ -34,7 +34,7 @@ class ChipParameter():
             if not (reduction_method is None):
                 import ReductionUtils
                 reduction_function = getattr(ReductionUtils, reduction_method)
-                v = reduction_function(paramvalues)
+                v = reduction_function(paramvalues, **reduction_method_args)
             
             else:
                 if len(paramvalues.unique())>1:
@@ -55,7 +55,7 @@ class ChipParameter():
 
             
 class HalfParameter():
-    def __init__(self, name, path, grouped_values, reduction_method=None):
+    def __init__(self, name, path, grouped_values, reduction_method=None, reduction_method_args={}):
         self.name=name
         self.path=path.split('/')
         self.values={}
@@ -65,7 +65,7 @@ class HalfParameter():
             if not (reduction_method is None):
                 import ReductionUtils
                 reduction_function = getattr(ReductionUtils, reduction_method)
-                v = reduction_function(paramvalues)
+                v = reduction_function(paramvalues, **reduction_method_args)
             else:
                 if len(paramvalues.unique())>1:
                     print(f"WARNING: parameter {name} has different values within ROC {chip} --> we will take the average value over the chip")
