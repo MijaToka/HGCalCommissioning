@@ -1,0 +1,6 @@
+{
+    "trim_inv":{
+    "Type":"CHANNEL0wise",
+    "Path":"<CHTYPE>/<CH>/trim_inv"
+    }
+}

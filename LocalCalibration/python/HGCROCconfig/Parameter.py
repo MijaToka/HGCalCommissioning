@@ -9,7 +9,9 @@ def edit_key(key, half=None, channel=None, chType=None):
         if (chType==1) or (chType==-1): # connected or nonconnected channel
             chtypestr="ch"
         elif chType==0: # calibration channel
-            chtypestr="calib"                
+            chtypestr="calib"
+        elif chType==2: # common mode
+            chtypestr="cm"
         else:
             raise ValueError("Unknown channel type")
     mod_key = key.replace("<HALF>",str(half))\
@@ -91,7 +93,7 @@ class ChannelParameter():
         # and save parameter in memory
         for (chip,channel,chType),paramvalues in grouped_values:
             if len(paramvalues.unique())>1:
-                raise ValueError(f"Parameter {name} takes multiple values in (ROC,channel)=({chip},{channel})")
+                raise ValueError(f"Parameter {name} takes multiple values in (ROC,channel,chType)=({chip},{channel},{chType})")
             v = paramvalues.mean()
             self.values[(chip,channel,chType)] = int(round(v))
 
