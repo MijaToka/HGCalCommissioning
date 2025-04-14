@@ -27,6 +27,10 @@ class HGCalTrimInvScan(HGCalCalibration):
     def __init__(self, raw_args=None, runtype='trim_inv_scan', scanparam='trim_inv'):
         self.histofiller = DAU.adcScanHistoFiller
         super().__init__(raw_args, runtype=runtype, scanparam=scanparam)
+
+    def addCommandLineOptions(self, parser):
+        """Add specific command line options for the VRef scan"""
+        super().addCommandLineOptions(parser)
     
     @staticmethod
     def analyze(args):
@@ -76,6 +80,7 @@ class HGCalTrimInvScan(HGCalCalibration):
             profile = modulecmprofile if ich == -1 else adcprofile
             y = np.array([profile.GetBinContent(ipt+1,ich+choffset) for ipt in range(npts)])
             yerr = np.array([profile.GetBinError(ipt+1,ich+choffset) for ipt in range(npts)])
+            nch = ich+choffset+(10000 if chType==2 else -1)
             
             # fit the model
             try:
@@ -84,10 +89,10 @@ class HGCalTrimInvScan(HGCalCalibration):
                 yexp = trim_inv_model(x,*popt)
                 chi2 = (((y-yexp)/yerr)**2).sum()
                 ndof = len(x)-len(popt)
-                fit_results.append( [ierx, ich+choffset, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, chType] )
+                fit_results.append( [ierx, nch, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, chType] )
             except Exception as e:
                 print(e)
-                fit_results.append( [ierx, ich+choffset] + [-1]*5 + [False]+ [chType] )
+                fit_results.append( [ierx, nch] + [-1]*5 + [False]+ [chType] )
             
             # show the fit result
             if not doPlots: continue
@@ -187,31 +192,15 @@ class HGCalTrimInvScan(HGCalCalibration):
         pass
     
     def createCorrectionsFile(self, results):
-        """Final tweaks of the analysis results to export as yaml."""
-        data = {'calib': {}, 'ch': {}, 'cm': {}}
+        """Final tweaks of the analysis results to export as json."""
+        corr_dict = {}
         for entry in results:
             typecode, fits = entry['Typecode'], entry['Fits']
-            fits = fits.set_index(['ich']).sort_index()
-            fits['roc'] = fits['ierx'].floordiv(2)
             fits['trim_inv'] = fits['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
-            fits = fits[['roc', 'trim_inv', 'chType']]
-            masks = {'calib': fits['chType'] == 0, 'ch': (fits['chType'] == -1) | (fits['chType'] == 1), 'cm': fits['chType'] == 2}
-            for key, mask in masks.items():
-                data[key][typecode] = fits[mask].groupby('roc').apply(
-                    lambda roc: (r := roc.reset_index(drop = True)).groupby(r.index).apply(
-                        lambda ch : ch[["trim_inv"]].to_dict("records")[0]
-                    ).to_dict()
-                ).to_dict()
-
-        yamlurl = []
-        for typecode, rocs in data['ch'].items():
-            for roc in rocs.keys():
-                yamlurl.append(f'{self.cmdargs.output}/{typecode.replace("_", "-")}_roc{roc}.yaml')
-                output = {k: data[k][typecode][roc] if roc in data[k][typecode] else {} for k in data.keys()}
-                with open(yamlurl[-1], 'w') as yaml_file:
-                    yaml.dump(output, yaml_file, default_flow_style=False)
-
-        return yamlurl
+            corr_dict[typecode] = {'Channel': fits['ich'].tolist(), 'trim_inv': fits['trim_inv'].tolist()}
+        jsonurl = f'{self.cmdargs.output}/triminvscan.json'
+        saveAsJson(jsonurl, corr_dict)
+        return jsonurl
         
 
 if __name__ == '__main__':

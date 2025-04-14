@@ -6,7 +6,8 @@ import importlib
 import pandas as pd
 
 # import common HGCalCommissioning tools
-sys.path.append("./")
+sys.path.extend(["./","./python/HGCROCconfig/"])
+from HGCROCInterface import DPGjsonToROCYaml
 try:
   from HGCalCommissioning.LocalCalibration.JSONEncoder import *
 except ImportError:
@@ -75,7 +76,10 @@ class HGCalCalibrationManager:
         calib_module = importlib.import_module(calib_module_name)
         print(f'Launching {calib_module_name} with cmdargs={calib_module_args}')
         calib_impl = getattr(calib_module,calib_module_name)(calib_module_args,runtype=runtype) # run
-        # TODO: convert JSON from calib_impl.jsonurl to YAML
+
+        # convert JSON from calib_impl.jsonurl to YAML
+        waferCellMap = os.path.expandvars("$CMSSW_DATA_PATH/data-Geometry-HGCalMapping/V00-01-00/Geometry/HGCalMapping/data/CellMaps/WaferCellMapTraces.txt")
+        DPGjsonToROCYaml(CalibJson=calib_impl.jsonurl, ChannelMapFile=waferCellMap, ParamMapFile=f'data/{calib_module_name}.json', OutPath=outputdir)
 
 
     def parseScanPointInfo(self, runtype : str, scan_point : dict):

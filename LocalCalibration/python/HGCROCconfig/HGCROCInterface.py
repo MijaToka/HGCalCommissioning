@@ -29,6 +29,13 @@ class HGCROCInterface():
         self.ChannelMap.loc[ (self.ChannelMap.ROCpin=="CALIB0") | (self.ChannelMap.ROCpin=="CALIB1") , "chType"] = 0
         self.ChannelMap.loc[ (self.ChannelMap.SiCell==-1) , "chType"] = -1
         self.ChannelMap["Channel"] = (self.ChannelMap.ROC*2 + self.ChannelMap.HalfROC)*37 + self.ChannelMap.Seq
+        cm = self.ChannelMap[self.ChannelMap.Seq==0].copy(deep=True)
+        cm["chType"] = 2
+        cm["Channel"] = cm["Channel"].add(10000)
+        self.ChannelMap = pd.concat([self.ChannelMap,cm])
+        self.ChannelMap['chTypeA'] = self.ChannelMap['chType'].abs()
+        self.ChannelMap = self.ChannelMap.sort_values(by=['ROC','chTypeA','Channel'])
+        self.ChannelMap["Channel0"] = self.ChannelMap.groupby(['ROC','chTypeA'],as_index=False).apply(lambda x: x.reset_index()).reset_index().set_index("level_1").index
 
         # load the parameter map
         with open(ParamMapFile,"r") as f:
@@ -42,8 +49,13 @@ class HGCROCInterface():
         """combine channel map with the measured parameters to be mapped to the ROC config"""
         
         req_params = list(self.ParamMap.keys())
-        Params = pd.DataFrame.from_dict(inputdict)[ ['Channel','Valid'] + req_params ]
-        Params = pd.merge(Params, self.ChannelMap, on="Channel")        
+        if 'ierx' in inputdict:
+            Params = pd.DataFrame.from_dict(inputdict)[ ['ierx'] + req_params ]
+            Params['ROC'] = Params['ierx'].floordiv(2)
+            Params['HalfROC'] = Params['ierx'].mod(2)
+        elif 'Channel' in inputdict:
+            Params = pd.DataFrame.from_dict(inputdict)[ ['Channel'] + req_params ]
+            Params = pd.merge(Params, self.ChannelMap, on="Channel")
         for p in req_params:
 
             paramtype = self.ParamMap[p]["Type"]
@@ -66,6 +78,11 @@ class HGCROCInterface():
                 paramvalues = Params.groupby(['ROC','Channel','chType'])[p]
                 ch_param = ChannelParameter(name=p, path=parampath, grouped_values=paramvalues)
                 self.parameters.append(ch_param)
+
+            elif paramtype=="CHANNEL0wise":
+                paramvalues = Params.groupby(['ROC','Channel0','chType'])[p]
+                ch_param = ChannelParameter(name=p, path=parampath, grouped_values=paramvalues)
+                self.parameters.append(ch_param)
                 
             else:
                 raise RuntimeError(f"Unknown parameter type {paramtype}")
@@ -78,8 +95,8 @@ class HGCROCInterface():
         for p in self.parameters:
             p.dump_to_yaml(nestedConf)
         
+        label = label.replace('_', '-')
         nestedConf = nestedConf.to_dict()
-        #print(nestedConf)
         for ROC,cfg in nestedConf.items():
             with open(f"{outpath}/{label}_ROC{ROC}.yaml","w") as outfile:
                 yaml.dump(cfg,outfile)

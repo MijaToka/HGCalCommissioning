@@ -1,0 +1,6 @@
+{
+    "Inv_vref":{
+	"Type":"HALFwise",
+	"Path":"ReferenceVoltage/<HALF>/Inv_vref"
+    }
+}
