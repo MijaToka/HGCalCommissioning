@@ -15,7 +15,8 @@ use rule step_SCRAM from base_workflows as step_SCRAM
 use rule step_RAW2DIGI from base_workflows as step_RAW2NANO with:
     params:
       **common_params,
-      cfg = "HGCalCommissioning/Configuration/test/step_RAW2NANO.py"
+      cfg = "HGCalCommissioning/Configuration/test/step_RAW2NANO.py",
+      extra = ""
     log:
       "step_RAW2NANO.log"
     output:

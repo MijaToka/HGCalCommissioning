@@ -10,12 +10,11 @@ setArgParserForRAW2DIGI(options)
 options.parseArguments()
 
 from HGCalCommissioning.Configuration.SysValEras_cff import *
-process, eraConfig = initSysValCMSProcess( procname='RAW2DIGI', era=era, run=run, maxEvents=options.maxEvents)
-print(f'Era = {era} has the following config')
+process, eraConfig = initSysValCMSProcess( procname='RAW2DIGI', era=options.era, run=options.run, maxEvents=options.maxEvents)
+print(f'Era = {options.era} has the following config')
 print(eraConfig)
 
 process = configureRAW2DIGIStep(process,options,eraConfig)
-process.p = cms.Path( process.raw2digi_step )
 
 process.output = cms.OutputModule(
   "PoolOutputModule",
@@ -26,7 +25,7 @@ process.output = cms.OutputModule(
     'keep FEDRawDataCollection_*_*_*',
     'keep *SoA*_hgcalDigis_*_*',
   ),
-  SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('p'))
+  SelectEvents=cms.untracked.PSet(SelectEvents=cms.vstring('raw2digi_step'))
 )
 if options.enableTPGunpacker:
     process.output.outputCommands.extend( ['keep TrgFEDRawDataCollection_*_*_*'] )
