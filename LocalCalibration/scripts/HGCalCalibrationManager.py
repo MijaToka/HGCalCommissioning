@@ -42,6 +42,9 @@ class HGCalCalibrationManager:
         print(cmdargs)
         
         # open run registry
+        if not os.path.isfile(cmdargs.input):
+          print(f'[Warning] {cmdargs.input} is not a valid registry file')
+          return
         df = pd.read_feather(cmdargs.input)
         
         # select entries that match reference
@@ -66,7 +69,7 @@ class HGCalCalibrationManager:
         print(f'Output directory is now {outputdir}')
         scan_map_json = f'{outputdir}/scan_map.json'
         saveAsJson(scan_map_json,scan_map)
-        
+
         # call calibration module
         print(f'Scan map defined @ {scan_map_json}')
         calib_module_args = ['--scanmap',scan_map_json,'-o',outputdir,'--forceRewrite']
@@ -116,12 +119,22 @@ class HGCalCalibrationManager:
         scan_inputs = {}
         total_scan_points_exp = 0
         for run, group in ref_df.groupby('Run'):
-            #print(run)
-            mask = (group['Ended']==True) & (group['Reports'].str.len()>0)
-            if mask.sum()==0: continue
-            last_entry_report = json.loads(group[mask].iloc[-1]['Reports'][0])
-            nanodir = last_entry_report['Output']
-            jobreport = glob.glob(f'{nanodir}/reports/job*{run}*.json')[0]
+
+            #offline one may use directly the run registry
+            if 'Reports' in group:
+              mask = (group['Ended']==True) & (group['Reports'].str.len()>0)
+              if mask.sum()==0: continue
+              last_entry_report = json.loads(group[mask].iloc[-1]['Reports'][0])
+              nanodir = last_entry_report['Output']              
+            #online one can use directly the local reco registry
+            else:
+              mask = (group['RecoValid']==True)
+              if mask.sum()==0: continue
+              nanodir = group['Output'].iloc[-1]
+
+            alljobreports = glob.glob(f'{nanodir}/reports/job*{run}*.json')
+            if len(alljobreports)==0: continue
+            jobreport = alljobreports[0]
             
             with open(jobreport,'r') as stream:
                 jobcfg = json.load(stream)
@@ -147,7 +160,8 @@ class HGCalCalibrationManager:
         else:
             print(f'Collected {total_scan_points} points')
 
-        return (total_scan_points_exp==total_scan_points), scan_inputs
+        scan_is_good = False if (total_scan_points==0) or (total_scan_points_exp!=total_scan_points) else True
+        return scan_is_good, scan_inputs
 
 
         
