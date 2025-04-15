@@ -26,7 +26,10 @@
     "Noise":{
 	"Type":"HALFwise",
 	"Path":"DigitalHalf/<HALF>/Adc_TH",
-	"ReductionMethod":"GetNoiseThreshold"
+	"ReductionMethod":"GetNoiseThreshold",
+	"ReductionMethodArgs":{
+	    "Nstddev":3.0
+	}
     },
     "ADC_ped":{
 	"Type":"CHANNELwise",

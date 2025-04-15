@@ -61,17 +61,23 @@ class HGCROCInterface():
             paramtype = self.ParamMap[p]["Type"]
             parampath = self.ParamMap[p]["Path"]
             paramreducmetd = None
+            paramreducmetdargs = {}
             if "ReductionMethod" in self.ParamMap[p]:
                 paramreducmetd = self.ParamMap[p]["ReductionMethod"]
 
+            if "ReductionMethodArgs" in self.ParamMap[p]:
+                paramreducmetdargs = self.ParamMap[p]["ReductionMethodArgs"]
+
             if paramtype=="CHIPwise":
                 paramvalues = Params.groupby('ROC')[p]
-                chip_param = ChipParameter(name=p, path=parampath, grouped_values=paramvalues, reduction_method=paramreducmetd)
+                chip_param = ChipParameter(name=p, path=parampath, grouped_values=paramvalues,
+                                           reduction_method=paramreducmetd, reduction_method_args=paramreducmetdargs)
                 self.parameters.append(chip_param)
 
             elif paramtype=="HALFwise":
                 paramvalues = Params.groupby(['ROC','HalfROC'])[p]
-                half_param = HalfParameter(name=p, path=parampath, grouped_values=paramvalues, reduction_method=paramreducmetd)
+                half_param = HalfParameter(name=p, path=parampath, grouped_values=paramvalues,
+                                           reduction_method=paramreducmetd, reduction_method_args=paramreducmetdargs)
                 self.parameters.append(half_param)
                 
             elif paramtype=="CHANNELwise":

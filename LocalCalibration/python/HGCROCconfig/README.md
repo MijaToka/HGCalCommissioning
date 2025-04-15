@@ -31,22 +31,31 @@ The file consist in the map, an example item is:
 "Noise":{                                                                                                                                     
    "Type":"HALFwise",                                                                                                                        
    "Path":"DigitalHalf/<HALF>/Adc_TH",                                                                                                       
-   "ReductionMethod":"GetNoiseThreshold"
+   "ReductionMethod":"GetNoiseThreshold",
+   "ReductionMethodArgs":{
+	    "Nstddev":10.0
+   }
 }, 
 ```
 where:
  * The key must be exactly the analysis parameter as appears in the json file
  * "Type" defines the granularity of the parameter, it can be "CHIPwise", "HALFwise", or "CHANNELwise"
  * "Path" specifies the tree stricture of the parameter in the HGCROC configuration file
- * "ReductionMethod" specifies how to calculate half- or chip-wise parameters starting from the channel values provided by the analysis json (see Custom reduction method for more details). The parameter is optional, by default the program will take the average over the half or chip.     
+ * "ReductionMethod" specifies how to calculate half- or chip-wise parameters starting from the channel values provided by the analysis json (see Custom reduction method for more details). The parameter is optional, by default the program will take the average over the half or chip.
+ * "ReductionMethodArgs" specifies possible additional arguments to provide as input to the reduction function. Depending on the definition of the reduction function in ReductionUtils.py, the parameter can be optional.      
 
 ## Custom reduction methods
 Custom methods to extract a half- or chip-wise parameter from the channel values can be defined as functions in ReductionUtils.py. For example:
 ```
 import numpy as np
 
-def GetNoiseThreshold(vals):
-    return 3.0 * np.mean(vals)
+#def GetNoiseThreshold(vals, Nstddev=3.0):
+#    return Nstddev * np.mean(vals)
+
+#or the less customizable version:
+#def GetNoiseThreshold(vals):
+#    return 3.0 * np.mean(vals)
+
 ```
 In order to associate a function to a certain parameter, the value of "ReductionMethod" in ParametersMap.json should be exactly the name of the function e.g. `"ReductionMethod":"GetNoiseThreshold"`
 
