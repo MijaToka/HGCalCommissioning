@@ -5,6 +5,7 @@
 
 from globals import defineGlobals
 cfgurl, job_dict, common_params = defineGlobals(workflow)
+calib_out_dir = f'{job_dict["caliboutdir"]}/pedestals/Run{job_dict["run"]}'
 
 module base_workflows:
     snakefile:
@@ -46,10 +47,10 @@ rule step_PEDESTALS:
     params:
         **common_params,
         nanodir=job_dict["output"],
-        calibout=f'{job_dict["output"]}/calibrations',
+        calibout=calib_out_dir
     output:
-        pedestals=f'{job_dict["output"]}/calibrations/pedestals.json',
-        l0calibs=f'{job_dict["output"]}/calibrations/level0_calib_params_Run{common_params["run"]}.json'
+        pedestals=f'{calib_out_dir}/pedestals.json',
+        l0calibs=f'{calib_out_dir}/level0_calib_params.json'
     input:
         rules.step_STORE.log,
         env = rules.step_SCRAM.output.env,
@@ -80,7 +81,7 @@ rule step_FETRIMMING:
     params:
         **common_params,
         nanodir=job_dict["output"],
-        calibout=f'{job_dict["output"]}/calibrations',
+        calibout=calib_out_dir
     input:        
         rules.step_STORE.log,
         env = rules.step_SCRAM.output.env,
