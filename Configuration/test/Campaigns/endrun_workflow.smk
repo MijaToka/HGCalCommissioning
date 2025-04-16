@@ -25,18 +25,20 @@ rule step_REPORTCOLLECTOR:
     output:
         report = "run_report.json",
         dqmcollector = "dqmcollector.feather"
+    log:
+        "step_REPORTCOLLECTOR.log"
     shell: 
         """
         source {input.env}
         python3 $CMSSW_BASE/src/HGCalCommissioning/Configuration/test/runJobReportCollector.py \
-		-i {params.cmssw_output}/reports -o {output.report}
-	python3 $CMSSW_BASE/src//HGCalCommissioning/DQM/test/dqm_collector.py -i {params.cmssw_output} -o {output.dqmcollector}
-	cp -v {output.report} {params.cmssw_output}/reports/
-	cp -v {output.dqmcollector} {params.cmssw_output}/reports/
+		-i {params.cmssw_output}/reports -o {output.report} > {log} 2>&1
+	python3 $CMSSW_BASE/src//HGCalCommissioning/DQM/test/dqm_collector.py -i {params.cmssw_output} -o {output.dqmcollector} >> {log} 2>&1
+	cp -v {output.report} {params.cmssw_output}/reports/ >> {log} 2>&1
+	cp -v {output.dqmcollector} {params.cmssw_output}/reports/ >> {log} 2>&1
         
         #try running the calibration manager (if jobs are not yet all done it will not do anything)
         cd $CMSSW_BASE/src/HGCalCommissioning/LocalCalibration
-        python3 scripts/HGCalCalibrationManager.py  -i {params.localrecoregistry} -o {params.calib_output} -r {params.reference}
+        python3 scripts/HGCalCalibrationManager.py  -i {params.localrecoregistry} -o {params.calib_output} -r {params.reference} -p="--doControlPlots"  >> {log} 2>&1
         cd -
         """
 
