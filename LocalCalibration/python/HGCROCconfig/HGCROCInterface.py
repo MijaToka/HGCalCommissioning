@@ -44,7 +44,7 @@ class HGCROCInterface():
         #initialize the parameter list
         self.parameters=[]
 
-    def from_dict(self, inputdict):
+    def from_dict(self, inputdict, swapERx=False):
 
         """combine channel map with the measured parameters to be mapped to the ROC config"""
         
@@ -52,9 +52,13 @@ class HGCROCInterface():
         if 'ierx' in inputdict:
             Params = pd.DataFrame.from_dict(inputdict)[ ['ierx'] + req_params ]
             Params['ROC'] = Params['ierx'].floordiv(2)
+            if swapERx:
+                Params['ierx'] = Params['ierx'].add(1) # offset to swap 0 and 1
             Params['HalfROC'] = Params['ierx'].mod(2)
         elif 'Channel' in inputdict:
             Params = pd.DataFrame.from_dict(inputdict)[ ['Channel'] + req_params ]
+            if swapERx:
+                Params['Channel'] = Params['Channel'].add(36).mod(72) # offset to swap 0-35 and 36-71
             Params = pd.merge(Params, self.ChannelMap, on="Channel")
         for p in req_params:
 
@@ -120,7 +124,7 @@ def DPGjsonToROCYaml(CalibJson : Union[dict,str], ChannelMapFile : str, ParamMap
 
     for typecode, data in calib_dict.items():
         rocio = HGCROCInterface(typecode,ChannelMapFile,ParamMapFile)
-        rocio.from_dict(data)
+        rocio.from_dict(data,swapERx=typecode.startswith('MH')) # TODO: fixe me when we already swap eRx's in CMSSW
         rocio.to_yaml(OutPath,typecode)
 
 
