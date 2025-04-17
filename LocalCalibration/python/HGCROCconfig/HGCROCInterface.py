@@ -44,7 +44,7 @@ class HGCROCInterface():
         #initialize the parameter list
         self.parameters=[]
 
-    def from_dict(self, inputdict, swapERx=False):
+    def from_dict(self, inputdict):
 
         """combine channel map with the measured parameters to be mapped to the ROC config"""
         
@@ -52,13 +52,9 @@ class HGCROCInterface():
         if 'ierx' in inputdict:
             Params = pd.DataFrame.from_dict(inputdict)[ ['ierx'] + req_params ]
             Params['ROC'] = Params['ierx'].floordiv(2)
-            if swapERx:
-                Params['ierx'] = Params['ierx'].add(1) # offset to swap 0 and 1
             Params['HalfROC'] = Params['ierx'].mod(2)
         elif 'Channel' in inputdict:
             Params = pd.DataFrame.from_dict(inputdict)[ ['Channel'] + req_params ]
-            if swapERx:
-                Params['Channel'] = Params['Channel'].add(36).mod(72) # offset to swap 0-35 and 36-71
             Params = pd.merge(Params, self.ChannelMap, on="Channel")
         for p in req_params:
 
@@ -123,10 +119,31 @@ def DPGjsonToROCYaml(CalibJson : Union[dict,str], ChannelMapFile : str, ParamMap
         calib_dict = CalibJson
 
     for typecode, data in calib_dict.items():
+        if typecode.startswith('MH'): # TODO: fixe me when we already swap eRx's in CMSSW
+            data = swapERx(data)
         rocio = HGCROCInterface(typecode,ChannelMapFile,ParamMapFile)
-        rocio.from_dict(data,swapERx=typecode.startswith('MH')) # TODO: fixe me when we already swap eRx's in CMSSW
+        rocio.from_dict(data)
         rocio.to_yaml(OutPath,typecode)
 
+def swapERx(data):
+    """Swap eRx's in each ROC of HD modules to match front end mapping.
+    TODO: Should become fixed in CMSSW's unpacker instead.
+    """
+    if 'Channel' in data:
+        sort_idx = [i+37*((ierx+1)%2)+74*roc for roc in range(6) for ierx in range(2) for i in range(37)]
+        for key in data:
+             if len(data[key])!=444: continue
+             if key=='Channel': continue
+             data[key] = [data[key][i] for i in sort_idx]
+    elif 'ierx' in data:
+        sort_idx = [(ierx+1)%2+2*roc for roc in range(6) for ierx in range(2)]
+        for key in data:
+             if len(data[key])!=12: continue
+             if key=='ierx': continue
+             data[key] = [data[key][i] for i in sort_idx]
+    else:
+        print(">>> HGCROCInterface.swapERx: WARNING! Could not swap eRx's for HD... No 'Channel' or 'ierx' key...")
+    return data
 
 if __name__ == '__main__':
 
