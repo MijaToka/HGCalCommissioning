@@ -80,7 +80,6 @@ class HGCalTrimInvScan(HGCalCalibration):
             profile = modulecmprofile if ich == -1 else adcprofile
             y = np.array([profile.GetBinContent(ipt+1,ich+choffset) for ipt in range(npts)])
             yerr = np.array([profile.GetBinError(ipt+1,ich+choffset) for ipt in range(npts)])
-            nch = ich+choffset+(10000 if chType==2 else -1)
             
             # fit the model
             try:
@@ -89,10 +88,10 @@ class HGCalTrimInvScan(HGCalCalibration):
                 yexp = trim_inv_model(x,*popt)
                 chi2 = (((y-yexp)/yerr)**2).sum()
                 ndof = len(x)-len(popt)
-                fit_results.append( [ierx, nch, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, chType] )
+                fit_results.append( [ierx, ich+choffset-1, popt[0], popt_unc[0], popt[1], popt_unc[1], chi2/ndof, True, chType] )
             except Exception as e:
                 print(e)
-                fit_results.append( [ierx, nch] + [-1]*5 + [False]+ [chType] )
+                fit_results.append( [ierx, ich+choffset-1] + [-1]*5 + [False]+ [chType] )
             
             # show the fit result
             if not doPlots: continue
@@ -196,8 +195,12 @@ class HGCalTrimInvScan(HGCalCalibration):
         corr_dict = {}
         for entry in results:
             typecode, fits = entry['Typecode'], entry['Fits']
-            fits['trim_inv'] = fits['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
-            corr_dict[typecode] = {'Channel': fits['ich'].tolist(), 'trim_inv': fits['trim_inv'].tolist()}
+            fits_cm = fits[fits['chType'] == 2].reset_index()
+            fits_cm['trim_inv'] = fits_cm['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
+            corr_dict[typecode] = {'ierx': fits_cm['ierx'].tolist(), 'trim_inv_cm': fits_cm['trim_inv'].tolist()}
+            fits_ch = fits[fits['chType'] != 2].reset_index()
+            fits_ch['trim_inv'] = fits_ch['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
+            corr_dict[typecode].update({'Channel': fits_ch['ich'].tolist(), 'trim_inv': fits_ch['trim_inv'].tolist()})
         jsonurl = f'{self.cmdargs.output}/triminvscan.json'
         saveAsJson(jsonurl, corr_dict)
         return jsonurl

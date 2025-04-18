@@ -2,5 +2,9 @@
     "trim_inv":{
     "Type":"CHANNEL0wise",
     "Path":"<CHTYPE>/<CH>/trim_inv"
+    },
+    "trim_inv_cm":{
+    "Type":"HALFwise",
+    "Path":"cm/<HALF>/trim_inv"
     }
 }

@@ -29,10 +29,6 @@ class HGCROCInterface():
         self.ChannelMap.loc[ (self.ChannelMap.ROCpin=="CALIB0") | (self.ChannelMap.ROCpin=="CALIB1") , "chType"] = 0
         self.ChannelMap.loc[ (self.ChannelMap.SiCell==-1) , "chType"] = -1
         self.ChannelMap["Channel"] = (self.ChannelMap.ROC*2 + self.ChannelMap.HalfROC)*37 + self.ChannelMap.Seq
-        cm = self.ChannelMap[self.ChannelMap.Seq==0].copy(deep=True)
-        cm["chType"] = 2
-        cm["Channel"] = cm["Channel"].add(10000)
-        self.ChannelMap = pd.concat([self.ChannelMap,cm])
         self.ChannelMap['chTypeA'] = self.ChannelMap['chType'].abs()
         self.ChannelMap = self.ChannelMap.sort_values(by=['ROC','chTypeA','Channel'])
         self.ChannelMap["Channel0"] = self.ChannelMap.groupby(['ROC','chTypeA'],as_index=False).apply(lambda x: x.reset_index()).reset_index().set_index("level_1").index
@@ -48,18 +44,17 @@ class HGCROCInterface():
 
         """combine channel map with the measured parameters to be mapped to the ROC config"""
         
-        req_params = list(self.ParamMap.keys())
-        if 'ierx' in inputdict:
-            Params = pd.DataFrame.from_dict(inputdict)[ ['ierx'] + req_params ]
-            Params['ROC'] = Params['ierx'].floordiv(2)
-            Params['HalfROC'] = Params['ierx'].mod(2)
-        elif 'Channel' in inputdict:
-            Params = pd.DataFrame.from_dict(inputdict)[ ['Channel'] + req_params ]
-            Params = pd.merge(Params, self.ChannelMap, on="Channel")
-        for p in req_params:
+        for p in self.ParamMap.keys():
 
             paramtype = self.ParamMap[p]["Type"]
             parampath = self.ParamMap[p]["Path"]
+            if paramtype in ['CHIPwise','HALFwise'] and 'ierx' in inputdict:
+                Params = pd.DataFrame.from_dict({k:inputdict[k] for k in ['ierx',p]})
+                Params['ROC'] = Params['ierx'].floordiv(2)
+                Params['HalfROC'] = Params['ierx'].mod(2)
+            elif 'Channel' in inputdict:
+                Params = pd.DataFrame.from_dict({k:inputdict[k] for k in ['Channel',p]})
+                Params = pd.merge(Params, self.ChannelMap, on="Channel")
             paramreducmetd = None
             paramreducmetdargs = {}
             if "ReductionMethod" in self.ParamMap[p]:
@@ -132,16 +127,14 @@ def swapERx(data):
     if 'Channel' in data:
         sort_idx = [i+37*((ierx+1)%2)+74*roc for roc in range(6) for ierx in range(2) for i in range(37)]
         for key in data:
-             if len(data[key])!=444: continue
-             if key=='Channel': continue
+             if len(data[key])!=444 or key=='Channel': continue
              data[key] = [data[key][i] for i in sort_idx]
-    elif 'ierx' in data:
+    if 'ierx' in data:
         sort_idx = [(ierx+1)%2+2*roc for roc in range(6) for ierx in range(2)]
         for key in data:
-             if len(data[key])!=12: continue
-             if key=='ierx': continue
+             if len(data[key])!=12 or key=='ierx': continue
              data[key] = [data[key][i] for i in sort_idx]
-    else:
+    if not ('Channel' in data or 'ierx' in data):
         print(">>> HGCROCInterface.swapERx: WARNING! Could not swap eRx's for HD... No 'Channel' or 'ierx' key...")
     return data
 

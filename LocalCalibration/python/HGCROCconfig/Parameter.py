@@ -10,8 +10,6 @@ def edit_key(key, half=None, channel=None, chType=None):
             chtypestr="ch"
         elif chType==0: # calibration channel
             chtypestr="calib"
-        elif chType==2: # common mode
-            chtypestr="cm"
         else:
             raise ValueError("Unknown channel type")
     mod_key = key.replace("<HALF>",str(half))\
