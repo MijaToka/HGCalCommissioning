@@ -98,7 +98,7 @@ class HGCalCalPulseScan(HGCalCalibration):
           correctors[typecode]=r_corrections
             
         #export final result
-        jsonurl = f'{self.cmdargs.output}/calpulse.json'
+        jsonurl = f'{self.cmdargs.output}/config_params_calpulse.json'
         saveAsJson(jsonurl, correctors)
 
         #do hexplots if required
