@@ -201,7 +201,7 @@ class HGCalTrimInvScan(HGCalCalibration):
             fits_ch = fits[fits['chType'] != 2].reset_index()
             fits_ch['trim_inv'] = fits_ch['trim_inv_optim'].fillna(0).astype('int').clip(upper=63)
             corr_dict[typecode].update({'Channel': fits_ch['ich'].tolist(), 'trim_inv': fits_ch['trim_inv'].tolist()})
-        jsonurl = f'{self.cmdargs.output}/triminvscan.json'
+        jsonurl = f'{self.cmdargs.output}/config_params_triminv.json'
         saveAsJson(jsonurl, corr_dict)
         return jsonurl
         

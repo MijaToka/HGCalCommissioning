@@ -374,7 +374,6 @@ class HGCalVRefScan(HGCalCalibration):
     
     def createCorrectionsFile(self, results):
         """Final tweaks of the analysis results to export as JSON."""
-        jsonurl   = "lol.json"
         corr_dict = { }
         params    = ['ierx',self.scanparam] # parameters to store
         for res in results:
@@ -385,7 +384,7 @@ class HGCalVRefScan(HGCalCalibration):
                 parvals = list(df_fitres[param])
                 sub_dict[param] = parvals
             corr_dict[typecode] = sub_dict
-        jsonurl = f'{self.cmdargs.output}/vrefscan.json'
+        jsonurl = f'{self.cmdargs.output}/config_params_vref.json'
         saveAsJson(jsonurl, corr_dict)
         return jsonurl
         
