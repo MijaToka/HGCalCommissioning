@@ -79,10 +79,12 @@ protected:
 private:
 
   /**
-     @short applies a counter-clockwise rotation in multiples of 60deg to a shape described by a TGraph
+    @short applies a counter-clockwise rotation in multiples of 60deg to a shape described by a TGraph
    */
   void rotateShape(TGraph *gr, char irot);
-
+  /**
+    @short applies a translation of the bin un the x-y plane
+   */
   void translateBin(TGraph *gr,float x0, float y0);
   
   //location of the hex map templates
@@ -352,7 +354,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     };
 
     //open file and loop over keys to hadd to THPoly (sequence of channel representations)
-    std::string geourl = templateDir_ + "/geometry_" + t.substr(0,4) + "_wafer.root";
+    std::string geourl = templateDir_ + "/WaferMaps/geometry_" + t.substr(0,4) + "_wafer.root";
     edm::FileInPath fip(geourl);
     TFile *fgeo = new TFile(fip.fullPath().c_str(), "R");
     TKey *key;
