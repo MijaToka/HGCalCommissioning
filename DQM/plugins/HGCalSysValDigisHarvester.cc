@@ -104,7 +104,7 @@ private:
 
   //skip trigger plots
   bool skipTriggerHarvesting_;
-
+    
   //module indexer / info
   edm::ESGetToken<HGCalMappingModuleIndexer, HGCalElectronicsMappingRcd> moduleIdxTkn_;
   edm::ESGetToken<hgcal::HGCalMappingModuleParamHost, HGCalElectronicsMappingRcd> moduleInfoTkn_;
@@ -124,7 +124,7 @@ private:
     {"avgtot",getLabelForSummaryIndex(SummaryIndices_t::TOTAVG)},
     {"n_dead_channels","Occupancy"}
   };
-  const std::string templateFile_ ="/ModuleMaps/geometry_ESR2v3.root";
+  const std::string templateFile_ ="/ModuleMaps/geometry_B27_v5.root";
   const std::string treeName = "module_position";
 
   //template information holders
@@ -254,10 +254,40 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       hexLayerModule_[layer][variable] = ibooker.book2DPoly("hex_"+variable+tag,  title + "; x[cm]; y[cm];"+SummaryLabel[variable], 13, 163.85, 2, 42);
     }
   }
+
+  //file dir
+  std::string coordinateFile = templateDir_+templateFile_;
+  edm::FileInPath fipmod(coordinateFile);
+  
+  // Open the template ROOT file
+  
+  TFile* fileGeo = TFile::Open(fipmod.fullPath().c_str(), "READ");
+  
+  if (!fileGeo || fileGeo->IsZombie()) { 
+    edm::LogError("HGCalSysValDigisHarvester") << "Error: Could not open file " << fipmod.fullPath().c_str()<<std::endl;
+  }
+  
+  // Get the TTree
+  TTree* tree = (TTree*)fileGeo->Get(treeName.c_str());
+  if (!tree) {
+    edm::LogError("HGCalSysValDigisHarvester") << "Error: TTree with name " << treeName << " found in "<< fipmod.fullPath().c_str() << std::endl;
+  }
+  
+  //get Template information
+  getModulesCenter(tree,&modules_centers);
+  getModulesCorners(tree,&modules_corners);
+  getModulesNVertices(tree,&modules_nvertices);
+  
+  fileGeo->Close();
+  delete fileGeo;
+
   //book the hex summary plots
   ibooker.setCurrentFolder("HGCAL/Modules");
 
-  uint32_t iMod(0);
+  std::map<int,uint32_t> iMod; //Per layer this is the index shift to plot correcly the hex plots
+  for (int layer : layerstates) {
+    iMod[layer] = 0;
+  }
 
   for(size_t i=0; i<typecodes.size(); i++) { // for each module
     
@@ -266,9 +296,9 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     int layer = layerstates[i];
     //std::cout<< "Layer number for the module: " << t.c_str() << " is " << layer << std::endl; 
     std::string modulename = t.c_str();
-    //std::cout<< x0y0_modules[modulename];
-    float x0 = x0y0_modules[modulename][0];
-    float y0 = x0y0_modules[modulename][1];
+    //std::cout<< modules_centers[modulename];
+    float x0 = modules_centers[modulename][0];
+    float y0 = modules_centers[modulename][1];
     //std::cout << "Module : "<<t.c_str()<<", x_0 : "<< x0 <<", y_0 : "<< y0<<std::endl;
 
     std::ostringstream ss;
@@ -325,7 +355,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       if (!obj->InheritsFrom("TGraph")) continue;
       TGraph *gr = (TGraph *)obj;
 
-      //skip CM channels
+      //skip CM or NC channels
       bool isCM = (iobj % 39 == 37) || (iobj % 39 == 38);
       bool isNC = ((iobj % 39 == 8) || (iobj % 39 == 17) || (iobj % 39 == 19) || (iobj % 39 == 28)) 
                 && t.substr(0,2) == "ML";
@@ -387,49 +417,44 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       if (!isNC) {
       TGraph *grLayer = new TGraph(*static_cast<TGraph *>(gr));
       translateBin(grLayer,x0,y0); // The bins are already rotated
-
+      
+      /**
+        iMod[layer]+chIdx-deltaIdx+1 is the index of the bin since we are skipping the CM and NC
+        * iMod[Layer]: each layer has it's own counter that saves the index shift from having already filled an ammount full modules
+        * chIdx = iobj-2*int(iobj/39) skippes the index of the CM channel that is counted in iobj.
+        * deltaIdx is equivalent to the int(iobj/39) for CM but it gets increased each time we loop over a NC channel.
+        (chIdx could be iobj-deltaIdxNC-deltaIdxCM with each one getting increased whenever we loop a NC or CM channel)
+      */
       hexLayerModule_[layer]["avgcm"]->addBin(grLayer);
-      hexLayerModule_[layer]["avgcm"]->setBinContent(iMod+chIdx-deltaIdx+1,avgcm);
+      hexLayerModule_[layer]["avgcm"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,avgcm);
       
       hexLayerModule_[layer]["avgadc"]->addBin(grLayer);
-      hexLayerModule_[layer]["avgadc"]->setBinContent(iMod+chIdx-deltaIdx+1,avgadc);
+      hexLayerModule_[layer]["avgadc"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,avgadc);
       
       hexLayerModule_[layer]["n_dead_channels"]->addBin(grLayer);
       if (avgadc==0.){
         value_module["n_dead_channels"] += 1;
-        hexLayerModule_[layer]["n_dead_channels"]->setBinContent(iMod+chIdx-deltaIdx+1,1);
+        hexLayerModule_[layer]["n_dead_channels"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,1);
       }
       hexLayerModule_[layer]["stdadc"]->addBin(grLayer);
-      hexLayerModule_[layer]["stdadc"]->setBinContent(iMod+chIdx-deltaIdx+1,stdadc);
+      hexLayerModule_[layer]["stdadc"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,stdadc);
 
       hexLayerModule_[layer]["deltaadc"]->addBin(grLayer);
-      hexLayerModule_[layer]["deltaadc"]->setBinContent(iMod+chIdx-deltaIdx+1,deltaadc);
+      hexLayerModule_[layer]["deltaadc"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,deltaadc);
 
       hexLayerModule_[layer]["avgtoa"]->addBin(grLayer);
-      hexLayerModule_[layer]["avgtoa"]->setBinContent(iMod+chIdx-deltaIdx+1,avgtoa);
+      hexLayerModule_[layer]["avgtoa"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,avgtoa);
 
       hexLayerModule_[layer]["avgtot"]->addBin(grLayer);
-      hexLayerModule_[layer]["avgtot"]->setBinContent(iMod+chIdx-deltaIdx+1,avgtot);
+      hexLayerModule_[layer]["avgtot"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,avgtot);
 
       hexLayerModule_[layer]["occupancy"]->addBin(grLayer);
-      hexLayerModule_[layer]["occupancy"]->setBinContent(iMod+chIdx-deltaIdx+1,occval);
+      hexLayerModule_[layer]["occupancy"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,occval);
       }
       iobj++;
     }
-    iMod +=iobj-2*int(iobj/39)-deltaIdx;
-    /*
-    int n_cells = 0; //this is very crude and needs reformating
-    if (t.c_str()[1]=='H')
-    {
-      n_cells += 72*6 + 12;
-    }else if (t.c_str()[1]=='L')
-    {
-      n_cells += 64*3 +6;
-    }else
-    {
-      n_cells += 1;
-    }
-    */
+    iMod[layer] +=iobj-2*int(iobj/39)-deltaIdx;
+
     char value = t.c_str()[1];
     int n_cells;
     int n_pillars;
@@ -480,63 +505,34 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     }
   //std::cout << "********** typecode = " << typecodes[i].c_str() <<'\n';
   }//end loop over typecodes of this run
-
-  //fgeo0->Close();
-  //register layer-level geometry & fill bin contents
-  //unsigned int nModulesPerLayer=11;
- 
-  //unsigned int layerModuleIdx=0;
-  
-  std::string geourl0 = templateDir_ + geometry_file;
-  edm::FileInPath fip0(geourl0);
-  TFile *fgeo0 = new TFile(fip0.fullPath().c_str(), "R");
-  /*
-  TKey *key0;
-  TIter nextkey0(fgeo0->GetDirectory(nullptr)->GetListOfKeys());
-  while ((key0 = (TKey *)nextkey0())) {
-    TObject *obj = key0->ReadObj();
-    if (!obj->InheritsFrom("TGraph")) continue;
-    TGraph *gr = (TGraph *)obj;
-    //std::cout << "Graph name: " << gr->GetName() << std::endl;
-    for(int layer:layerstates) {
-      // int moduleIdx = nModulesPerLayer*i + layerModuleIdx;
-      auto binlabel = typecodes[moduleIdx].c_str();
-      std::cout << "BinLabel: " << binlabel << std::endl;
-      
-      for (std::string variable:variables) {
-        value_module[variable] = Module_[variable]->getBinContent(layerModuleIdx+1);
-        //hexLayerAverage_[i][variable]->setBinLabel(layerModuleIdx+1,binlabel,1);
-        hexLayerAverage_[layer][variable]->addBin(gr);
-        hexLayerAverage_[layer][variable]->setBinContent(layerModuleIdx+1,value_module[variable]);
-      }
-    }
-    layerModuleIdx+=1;
+  std::map<int,int> iLayer; //Per layer, index of the current Module bin in each layer as to plot correctly the average plot
+  for (int layer:layerstates){
+    iLayer[layer]=0;
   }
-  //std::cout<<"********** Closing file **********";
-  */
-
-
-  for (size_t i=0;i<typecodes.size();i++){
+  //register layer-level geometry & fill bin contents
+  for (size_t i=0;i<typecodes.size();i++){ //for each module
     std::string t = typecodes[i];
     //char irot = irotstates[i];
     int layer = layerstates[i];
-    
-    TGraph* gr = (TGraph * )fgeo0->Get(t.c_str());
+
+    int n = modules_nvertices[t];
+    std::vector x = modules_corners[t][0];
+    std::vector y = modules_corners[t][1];
+    TGraph* gr = new TGraph(n,x.data(),y.data());
     
     if (!gr){
-      std::cerr << "Could not find the bin in " << geourl0;
+      std::cerr << "Could not generate the bin."<<std::endl;
     }
     
+    gr->SetName(t.c_str());
+
     for (std::string variable:variables) {
       value_module[variable] = Module_[variable]->getBinContent(i+1);
       //hexLayerAverage_[i][variable]->setBinLabel(layerModuleIdx+1,binlabel,1);
       hexLayerAverage_[layer][variable]->addBin(gr);
-      hexLayerAverage_[layer][variable]->setBinContent(i+1,value_module[variable]);
+      hexLayerAverage_[layer][variable]->setBinContent(iLayer[layer]+1,value_module[variable]);
     }
-
   }
-  fgeo0->Close();
-
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
 }
 
@@ -659,7 +655,8 @@ void HGCalSysValDigisHarvester::rotateShape(TGraph *gr, char irot) {
 
   //define the full rotation matrix
   //the template needs a 150 deg shift to be put in the standard position 
-  float angle(irot*M_PI/3.+5*M_PI/6.);
+  //the template is rotated by -90° not 150° (?)
+  float angle(irot*M_PI/3.-M_PI/2.);
   Eigen::Matrix2d rotationMatrix;
   rotationMatrix <<
     std::cos(angle), -std::sin(angle),
