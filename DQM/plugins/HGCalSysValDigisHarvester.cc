@@ -86,6 +86,18 @@ private:
     @short applies a translation of the bin un the x-y plane
    */
   void translateBin(TGraph *gr,float x0, float y0);
+  /**
+    @short generated a map of module typecode : {x0,y0} of the module from a TTree in the module geometry file
+   */
+  void getModulesCenter (TTree *tree, std::map<std::string, std::vector<double>> *moduleCoordinateMap);
+  /**
+    @short generated a map of module typecode : {x,y} of the module from a TTree in the module geometry file
+   */
+  void getModulesCorners (TTree *tree, std::map< std::string ,std::vector< std::vector<float> > > *moduleCornersMap);
+/**
+    @short generated a map of module typecode : nvertices of the module from a TTree in the module geometry file
+   */
+  void getModulesNVertices (TTree *tree, std::map<std::string,int> *moduleNVerteicesMap);
   
   //location of the hex map templates
   std::string templateDir_;
@@ -112,67 +124,13 @@ private:
     {"avgtot",getLabelForSummaryIndex(SummaryIndices_t::TOTAVG)},
     {"n_dead_channels","Occupancy"}
   };
-  const std::string geometry_file ="/ESR2_from_modmap.root";
-  /*
-  std::string geourl0 = templateDir_ + geometry_file;
-  edm::FileInPath fip0=geourl0;
-  TFile *file = TFile::Open(fip0.fullPath().c_str(), "READ");
-  if (!file || file->IsZombie()) {
-    std::cerr << "Error opening file!" << std::endl;
-    return 1;
-  }
-  
-  // Get the TTree
-  TTree *tree = (TTree *)file->Get("module_position");
-  if (!tree) {
-    std::cerr << "Error: TTree not found!" << std::endl;
-    return 1;
-  }
-  
-  // Variables to read the data
-  std::string key;
-  std::vector<float> value;
-  
-  // Set branch addresses
-  tree->SetBranchAddress("key", &key);
-  tree->SetBranchAddress("value", &value);
-  
-  // Map to store the data
-  std::map<std::string, std::vector<float>> my_map;
-  
-  // Loop over the entries in the tree
-  for (int i = 0; i < tree->GetEntries(); ++i) {
-    tree->GetEntry(i);
-    my_map[key] = value;  // Add to the map
-  }
-    // Print the map to verify
-    for (const auto &pair : my_map) {
-      std::cout << "Key: " << pair.first << ", Values: ";
-      for (float v : pair.second) {
-        std::cout << v << " ";
-      }
-      std::cout << std::endl;
-    }
-    
-    // Clean up
-    file->Close();
-    delete file;
-    
-    */
-    
-  std::map<std::string,std::vector<float>> x0y0_modules = {
-    {"ML_F3W_WXIH0012",{142.904,14.755}},
-    {"ML_F2W_WXIH0006",{134.522,29.273000000000003}},
-    {"ML_F3W_WXIH0005",{117.758,29.273000000000003}},
-    {"ML_F3W_WXIH0004",{100.993,29.273000000000003}},
-    {"ML_F2W_WXIH0001",{84.22999999999999,29.273000000000003}},
-    {"MH_F1W_WXNT0001",{42.32,14.755}},
-    {"MH_F1W_WXNT0005",{59.084,14.755}},
-    {"MH_F1W_WXNT0006",{75.848,14.755}},
-    {"MH_F1W_WXNT0023",{33.938,29.273000000000003}},
-    {"MH_F1W_WXNT0024",{50.702,29.273000000000003}},
-    {"MH_F1W_WXNT0007",{67.466,29.273000000000003}}
-};
+  const std::string templateFile_ ="/ModuleMaps/geometry_ESR2v3.root";
+  const std::string treeName = "module_position";
+
+  //template information holders
+  std::map<std::string, std::vector<double>> modules_centers;
+  std::map<std::string, std::vector<std::vector<float>>> modules_corners;
+  std::map<std::string,int> modules_nvertices;
 
   // layer/type/me
   std::map<unsigned int, std::map<std::string, MonitorElement *> > hexLayerAverage_;
@@ -428,7 +386,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
 
       if (!isNC) {
       TGraph *grLayer = new TGraph(*static_cast<TGraph *>(gr));
-      translateBin(grLayer,x0,y0); // Still need x0 and y0 defined here
+      translateBin(grLayer,x0,y0); // The bins are already rotated
 
       hexLayerModule_[layer]["avgcm"]->addBin(grLayer);
       hexLayerModule_[layer]["avgcm"]->setBinContent(iMod+chIdx-deltaIdx+1,avgcm);
@@ -733,6 +691,81 @@ void HGCalSysValDigisHarvester::translateBin(TGraph *gr, float x0, float y0) {
 
 }
 //
+
+void HGCalSysValDigisHarvester::getModulesCenter (TTree *tree, std::map<std::string, std::vector<double>>* moduleCoordinateMap) {
+  /**
+   * Get's the x0,y0 pairs from geometry file's TTree and maps them to the typecode
+   */
+  std::string* typecode = nullptr;
+  double x0;
+  double y0;
+
+  // Set branch addresses
+  tree->SetBranchAddress("typecode", &typecode);
+  tree->SetBranchAddress("x0", &x0);
+  tree->SetBranchAddress("y0", &y0);
+
+
+  for (int i = 0; i < tree->GetEntries(); ++i) {
+      tree->GetEntry(i);
+      std::vector<double> values = {x0,y0};
+      (*moduleCoordinateMap)[*typecode] = values;  // Add to the map
+  }
+  
+  // Clean up
+  tree->ResetBranchAddresses();
+  delete typecode;  // Free the memory allocated for key
+  return ;
+}
+
+void HGCalSysValDigisHarvester::getModulesNVertices (TTree *tree, std::map<std::string,int> *moduleNVerteicesMap) {
+  /**
+   * Get's the nvertices from geometry file's TTree and maps them to the typecode
+   */
+  std::string* typecode = nullptr;
+  int nvertices;
+
+  tree->SetBranchAddress("typecode", &typecode);
+  tree->SetBranchAddress("nvertices", &nvertices);
+
+  for (int i = 0; i < tree->GetEntries(); ++i) {
+      tree->GetEntry(i);
+      (*moduleNVerteicesMap)[*typecode] = nvertices;  // Add to the map
+  }
+  
+  // Clean up
+  tree->ResetBranchAddresses();
+  delete typecode;  // Free the memory allocated for key
+  return ;
+}
+
+void HGCalSysValDigisHarvester::getModulesCorners (TTree *tree, std::map< std::string ,std::vector< std::vector<float> > > *moduleCornersMap){
+  /**
+   * Get's the x,y arrays from geometry file's TTree and saves them in moduleCornersMap by typecode.
+   */
+  std::string* typecode = nullptr;
+  std::vector<float>* x = nullptr;
+  std::vector<float>* y = nullptr;
+
+  tree->SetBranchAddress("typecode", &typecode);
+  tree->SetBranchAddress("x", &x);
+  tree->SetBranchAddress("y", &y);
+
+  for (int i = 0; i < tree->GetEntries(); ++i) {
+      tree->GetEntry(i);
+      std::vector<std::vector<float>> values;
+      values.push_back(*x);
+      values.push_back(*y);
+      (*moduleCornersMap)[*typecode] = values;  // Add to the map
+  }
+  // Clean up
+  tree->ResetBranchAddresses();
+  delete typecode;  // Free the memory allocated for key
+  delete x;
+  delete y;
+  return ;
+}
+  
 void HGCalSysValDigisHarvester::dqmEndJob(DQMStore::IBooker &ibooker, DQMStore::IGetter &igetter) {}
 
 DEFINE_FWK_MODULE(HGCalSysValDigisHarvester);
