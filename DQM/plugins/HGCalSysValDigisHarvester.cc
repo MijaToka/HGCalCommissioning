@@ -86,19 +86,16 @@ private:
     @short applies a translation of the bin un the x-y plane
    */
   void translateBin(TGraph *gr,float x0, float y0);
-  /**
-    @short generated a map of module typecode : {x0,y0} of the module from a TTree in the module geometry file
-   */
-  void getModulesCenter (TTree *tree, std::map<std::string, std::vector<double>> *moduleCoordinateMap);
-  /**
-    @short generated a map of module typecode : {x,y} of the module from a TTree in the module geometry file
-   */
-  void getModulesCorners (TTree *tree, std::map< std::string ,std::vector< std::vector<float> > > *moduleCornersMap);
 /**
-    @short generated a map of module typecode : nvertices of the module from a TTree in the module geometry file
-   */
-  void getModulesNVertices (TTree *tree, std::map<std::string,int> *moduleNVerteicesMap);
-  
+    @short retieves the TGraph found in /isSiPM_{isSiPM}/plane_{plane}/u_{u}/v_{v} from the geometry file
+*/
+  TGraph* getModuleBin(TFile* file, bool isSiPM,int plane,int u, int v);
+
+/**
+    @short retieves the x0,y0 position found in /isSiPM_{isSiPM}/plane_{plane}/u_{u}/v_{v} from the geometry file 
+*/
+  std::vector<double> getModuleCenter(TFile* file, bool isSiPM,int plane,int u, int v);
+
   //location of the hex map templates
   std::string templateDir_;
 
@@ -124,8 +121,10 @@ private:
     {"avgtot",getLabelForSummaryIndex(SummaryIndices_t::TOTAVG)},
     {"n_dead_channels","Occupancy"}
   };
-  const std::string templateFile_ ="/ModuleMaps/geometry_B27_v5.root";
-  const std::string treeName = "module_position";
+
+  const std::string geometryTemplate_ = "/geometry_v16.5.root";
+  const std::string templateFile_ = "/ModuleMaps/geometry_B27_v5.root";
+
 
   //template information holders
   std::map<std::string, std::vector<double>> modules_centers;
@@ -194,7 +193,12 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
   //get module indexer and module info to fill the rotation index of the modules
   //for a better display of the hexplots
   std::vector<char> irotstates(typecodes.size(),0);
-  std::vector<int> layerstates(typecodes.size(),0);
+  std::vector<int> layerstates(typecodes.size(),0),ustates(typecodes.size(),0),vstates(typecodes.size(),0);
+  std::vector<bool> isSiPMstates(typecodes.size(),0);
+
+  std::vector<std::vector<double>> x0y0states(typecodes.size(),std::vector<double>(2,0));
+  std::vector<TGraph*> binstates(typecodes.size(),0);
+  
   auto const& moduleIndexer = iSetup.getData(moduleIdxTkn_);
   auto const& moduleInfo = iSetup.getData(moduleInfoTkn_);
   for(auto it : moduleIndexer.getTypecodeMap()) {
@@ -208,6 +212,15 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     auto modInfo = moduleInfo.view()[dqmIndex];
     irotstates[dqmIndex] = modInfo.irot();
     layerstates[dqmIndex] = modInfo.plane();
+
+    std::string geometryFile = templateDir_+geometryTemplate_;
+    edm::FileInPath fiptemp(geometryFile);
+    TFile* file = TFile::Open(fiptemp.fullPath().c_str(), "READ");
+    
+    x0y0states[dqmIndex] = getModuleCenter(file, modInfo.isSiPM(),modInfo.plane(),modInfo.i1(),modInfo.i2());
+    binstates[dqmIndex] = getModuleBin(file, modInfo.isSiPM(),modInfo.plane(),modInfo.i1(),modInfo.i2());
+
+    file->Close();
   }
 
   //define layer-level summary
@@ -255,31 +268,6 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     }
   }
 
-  //file dir
-  std::string coordinateFile = templateDir_+templateFile_;
-  edm::FileInPath fipmod(coordinateFile);
-  
-  // Open the template ROOT file
-  
-  TFile* fileGeo = TFile::Open(fipmod.fullPath().c_str(), "READ");
-  
-  if (!fileGeo || fileGeo->IsZombie()) { 
-    edm::LogError("HGCalSysValDigisHarvester") << "Error: Could not open file " << fipmod.fullPath().c_str()<<std::endl;
-  }
-  
-  // Get the TTree
-  TTree* tree = (TTree*)fileGeo->Get(treeName.c_str());
-  if (!tree) {
-    edm::LogError("HGCalSysValDigisHarvester") << "Error: TTree with name " << treeName << " found in "<< fipmod.fullPath().c_str() << std::endl;
-  }
-  
-  //get Template information
-  getModulesCenter(tree,&modules_centers);
-  getModulesCorners(tree,&modules_corners);
-  getModulesNVertices(tree,&modules_nvertices);
-  
-  fileGeo->Close();
-  delete fileGeo;
 
   //book the hex summary plots
   ibooker.setCurrentFolder("HGCAL/Modules");
@@ -294,11 +282,13 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     std::string t = typecodes[i];
     char irot = irotstates[i];
     int layer = layerstates[i];
-    //std::cout<< "Layer number for the module: " << t.c_str() << " is " << layer << std::endl; 
-    std::string modulename = t.c_str();
-    //std::cout<< modules_centers[modulename];
-    float x0 = modules_centers[modulename][0];
-    float y0 = modules_centers[modulename][1];
+    std::vector<double> x0y0 = x0y0states[i];
+    
+    double x0 = x0y0[0];
+    double y0 = x0y0[1];
+
+    //std::string modulename = t.c_str();
+
     //std::cout << "Module : "<<t.c_str()<<", x_0 : "<< x0 <<", y_0 : "<< y0<<std::endl;
 
     std::ostringstream ss;
@@ -457,20 +447,20 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
 
     char value = t.c_str()[1];
     int n_cells;
-    int n_pillars;
+    int n_CM_cells;
    
    switch (value){
        case 'H':
        n_cells = 72*6;
-       n_pillars = 12;
+       n_CM_cells = 12; //
        break;
        case 'L':
-       n_cells = 72*3;
-       n_pillars = 6;
+       n_cells = 72*3; //The NC cells are counted and averaged as well
+       n_CM_cells = 6;
        break;
        default:
        n_cells = 1;
-       n_pillars = 0;
+       n_CM_cells = 0;
        break;
    }
     
@@ -479,7 +469,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
         value_module[variable] /= n_cells;
       }else if (variable =="n_dead_channels")
       {
-        value_module[variable] -= n_pillars;
+        value_module[variable] -= n_CM_cells;
       }
         
       
@@ -515,10 +505,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     //char irot = irotstates[i];
     int layer = layerstates[i];
 
-    int n = modules_nvertices[t];
-    std::vector x = modules_corners[t][0];
-    std::vector y = modules_corners[t][1];
-    TGraph* gr = new TGraph(n,x.data(),y.data());
+    TGraph* gr = binstates[i];
     
     if (!gr){
       std::cerr << "Could not generate the bin."<<std::endl;
@@ -532,6 +519,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       hexLayerAverage_[layer][variable]->addBin(gr);
       hexLayerAverage_[layer][variable]->setBinContent(iLayer[layer]+1,value_module[variable]);
     }
+    iLayer[layer]++;
   }
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
 }
@@ -689,80 +677,81 @@ void HGCalSysValDigisHarvester::translateBin(TGraph *gr, float x0, float y0) {
 }
 //
 
-void HGCalSysValDigisHarvester::getModulesCenter (TTree *tree, std::map<std::string, std::vector<double>>* moduleCoordinateMap) {
-  /**
-   * Get's the x0,y0 pairs from geometry file's TTree and maps them to the typecode
-   */
-  std::string* typecode = nullptr;
-  double x0;
-  double y0;
 
-  // Set branch addresses
-  tree->SetBranchAddress("typecode", &typecode);
-  tree->SetBranchAddress("x0", &x0);
-  tree->SetBranchAddress("y0", &y0);
+TGraph* HGCalSysValDigisHarvester::getModuleBin(TFile* file, bool isSiPM,int plane,int u, int v){
+    
+    TGraph* gr = nullptr;
+    
+    std::ostringstream oss;
+    oss << "/isSiPM_" << int(isSiPM)
+            << "/plane_" << plane
+            << "/u_" << u
+            << "/v_" << v;
+    
+    std::string moduleDir = oss.str();  
+    
 
-
-  for (int i = 0; i < tree->GetEntries(); ++i) {
-      tree->GetEntry(i);
-      std::vector<double> values = {x0,y0};
-      (*moduleCoordinateMap)[*typecode] = values;  // Add to the map
-  }
-  
-  // Clean up
-  tree->ResetBranchAddresses();
-  delete typecode;  // Free the memory allocated for key
-  return ;
+    if (!file->cd(moduleDir.c_str())) {
+        std::cerr << "Could not cd to directory!" << std::endl;
+        return nullptr;
+    }
+    
+    gr = dynamic_cast<TGraph*>(gDirectory->Get("module_bin"));
+    
+    if (!gr){
+        std::cerr << "Error: Bin not found!" << std::endl;
+        return nullptr;
+    }
+    
+    
+    file->cd("/");
+    
+    return gr;
+    
 }
 
-void HGCalSysValDigisHarvester::getModulesNVertices (TTree *tree, std::map<std::string,int> *moduleNVerteicesMap) {
-  /**
-   * Get's the nvertices from geometry file's TTree and maps them to the typecode
-   */
-  std::string* typecode = nullptr;
-  int nvertices;
 
-  tree->SetBranchAddress("typecode", &typecode);
-  tree->SetBranchAddress("nvertices", &nvertices);
+std::vector<double> HGCalSysValDigisHarvester::getModuleCenter(TFile* file, bool isSiPM,int plane,int u, int v){
+    
+    std::vector<double> x0y0(2,0);
+    std::ostringstream oss;
+    oss << "/isSiPM_" << int(isSiPM)
+            << "/plane_" << plane
+            << "/u_" << u
+            << "/v_" << v;
+    
+    std::string moduleDir = oss.str();  
 
-  for (int i = 0; i < tree->GetEntries(); ++i) {
-      tree->GetEntry(i);
-      (*moduleNVerteicesMap)[*typecode] = nvertices;  // Add to the map
-  }
-  
-  // Clean up
-  tree->ResetBranchAddresses();
-  delete typecode;  // Free the memory allocated for key
-  return ;
-}
+    if (!file->cd(moduleDir.c_str())) {
+        std::cerr << "Could not cd to directory!" << std::endl;
+        return x0y0;
+    }
+    
+    TTree* tree = dynamic_cast<TTree*>(gDirectory->Get("module_properties"));
+    
+    if (!tree){
+        std::cerr << "Error: TTree not found!" << std::endl;
+        return x0y0;    
+    }
+    
+    double x0,y0;
+    
+    tree->SetBranchAddress("x0",&x0);
+    tree->SetBranchAddress("y0",&y0);
+    if (!(tree->GetEntries()>0)){
+      std::cerr << "TTree empty" << std::endl;
+    }
 
-void HGCalSysValDigisHarvester::getModulesCorners (TTree *tree, std::map< std::string ,std::vector< std::vector<float> > > *moduleCornersMap){
-  /**
-   * Get's the x,y arrays from geometry file's TTree and saves them in moduleCornersMap by typecode.
-   */
-  std::string* typecode = nullptr;
-  std::vector<float>* x = nullptr;
-  std::vector<float>* y = nullptr;
+    tree->GetEntry(0);
+    x0y0[0] = x0; x0y0[1] = y0;
+    
+    // Restore original directory (usually root of the file)
+    gDirectory->cd("/");
+    delete tree;
+    return x0y0;
+} 
 
-  tree->SetBranchAddress("typecode", &typecode);
-  tree->SetBranchAddress("x", &x);
-  tree->SetBranchAddress("y", &y);
 
-  for (int i = 0; i < tree->GetEntries(); ++i) {
-      tree->GetEntry(i);
-      std::vector<std::vector<float>> values;
-      values.push_back(*x);
-      values.push_back(*y);
-      (*moduleCornersMap)[*typecode] = values;  // Add to the map
-  }
-  // Clean up
-  tree->ResetBranchAddresses();
-  delete typecode;  // Free the memory allocated for key
-  delete x;
-  delete y;
-  return ;
-}
-  
 void HGCalSysValDigisHarvester::dqmEndJob(DQMStore::IBooker &ibooker, DQMStore::IGetter &igetter) {}
 
 DEFINE_FWK_MODULE(HGCalSysValDigisHarvester);
