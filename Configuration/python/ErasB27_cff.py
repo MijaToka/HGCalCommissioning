@@ -38,11 +38,20 @@ Eras_B27 = {
             'trig_scintillator_block':-1,
             'trig_num_blocks':6
         },
-                '5': {
+        '5': {
             'fedId':[0],
             'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_ESR2v3.txt',
             'fedconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_feds_ESR2v3.json',
             'modconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_econds_ESR2v3.json',
+            'modcalib':None,
+            'trig_scintillator_block':-1,
+            'trig_num_blocks':6
+        },
+        '6': {
+            'fedId':[0],
+            'modules':'HGCalCommissioning/Configuration/data/ModuleMaps/modulelocator_ESR2v4.txt',
+            'fedconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_feds_ESR2v4.json',
+            'modconfig':'/eos/cms/store/group/dpg_hgcal/tb_hgcal/DPG/calibrations/B27/config/config_econds_ESR2v4.json',
             'modcalib':None,
             'trig_scintillator_block':-1,
             'trig_num_blocks':6
