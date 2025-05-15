@@ -50,7 +50,7 @@ for module in modMap.itertuples():
 
     x0[0] = module.x0/10 #Modmap is in [mm] and the wafer maps are in [cm]
     y0[0] = module.y0/10
-    icassette[0]= module.icassette
+    icassette[0] = module.icassette
 
     tree.Fill()
     #center_position = ROOT.TVector2(module.x0/10,module.y0/10)

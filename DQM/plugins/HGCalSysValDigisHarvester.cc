@@ -9,6 +9,7 @@
 #include <sstream>
 #include <math.h>
 #include <map>
+#include <set>
 
 #include <chrono>
 #include <ctime>
@@ -109,8 +110,9 @@ private:
   //monitoring elements
   MonitorElement *occupancyLayer_,*meTimestamp_;
   std::map<std::string, MonitorElement *> Module_;
+  std::map<std::string, MonitorElement *> Layer_;
 
-  const std::string variables[8] = {"occupancy","avgcm","avgadc","stdadc","deltaadc","avgtoa","avgtot","n_dead_channels"};
+  const std::string variables[8] = {"occupancy","avgcm","avgadc","stdadc","deltaadc","avgtoa","avgtot","n_vacant_channels"};
   std::map<std::string,std::string> SummaryLabel {
     {"occupancy","Occupancy"},
     {"avgcm",getLabelForSummaryIndex(SummaryIndices_t::CMAVG)},
@@ -119,7 +121,7 @@ private:
     {"deltaadc",getLabelForSummaryIndex(SummaryIndices_t::DELTAPEDESTAL)},
     {"avgtoa",getLabelForSummaryIndex(SummaryIndices_t::TOAAVG)},
     {"avgtot",getLabelForSummaryIndex(SummaryIndices_t::TOTAVG)},
-    {"n_dead_channels","Occupancy"}
+    {"n_vacant_channels","Occupancy"}
   };
 
   const std::string geometryTemplate_ = "/geometry_v16.5.root";
@@ -212,6 +214,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     auto modInfo = moduleInfo.view()[dqmIndex];
     irotstates[dqmIndex] = modInfo.irot();
     layerstates[dqmIndex] = modInfo.plane();
+    isSiPMstates[dqmIndex] = modInfo.isSiPM();
 
     std::string geometryFile = templateDir_+geometryTemplate_;
     edm::FileInPath fiptemp(geometryFile);
@@ -223,19 +226,34 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     file->Close();
   }
 
+  std::set<int> unique_layerstates(layerstates.begin(),layerstates.end());
+
   //define layer-level summary
   ibooker.setCurrentFolder("HGCAL/Layers/Summary");
-  size_t nLayers = 26; // NOTE: place holder for CE-E layers. Only two layers in 2024 beam test
+  size_t nLayers = 47; // NOTE: place holder for CE-E layers. Only two layers in 2024 beam test
+  size_t nSiPMLayers = 14;
   size_t nModules = typecodes.size();
-  occupancyLayer_ = ibooker.book1D("summary_occupancy_layer", ";Layer; #hits", nLayers, 0.5, nLayers+0.5);
+  // Here we are ging to distinguish the SiPM from the boards so the first 47 layers will contain only the 
+  // silicon modules and the bins 48 to 61 will house the SiPM values from planes 34 to 47
+  // this is for further intregration and making a trasversal easier to integrate.
   
+  //occupancyLayer_ = ibooker.book1D("summary_occupancy_layer", ";Layer; #hits", nLayers+nSiPMLayers, 0.5, nLayers+nSiPMLayers+0.5);
+  // ^ occupancy is included in the variables
   std::map<std::string,float> value_module;
-  
-  float total_nHits_layer = 0; // M0, M1, M2 in layer1; M3, M4, M5 in layer2
+  std::map<unsigned int,int> module_count;
+  std::map<unsigned int,std::map<std::string,float>> value_layer;
+
+  std::map<int,uint32_t> iMod; //Per layer this is the index shift to plot correcly the channel-granularity plots
+  std::map<int,int> iLayer; //Per layer, index of the current Module bin in each layer as to plot correctly the module-granularity plot
     
   for (std::string variable: variables) {
     value_module[variable] = 0.;
-    Module_[variable] = ibooker.book1D("summary_"+variable+"_module", ";Module; value", nModules, 0.5, nLayers+0.5);
+    Module_[variable] = ibooker.book1D("summary_"+variable+"_module", ";Module;value;"+SummaryLabel[variable], nModules, 0.5, nModules+0.5);
+    Layer_[variable] = ibooker.book1D("summary_"+variable+"_layer",";Layer;value;"+SummaryLabel[variable], nLayers+nSiPMLayers, 0.5,nLayers+nSiPMLayers+0.5);
+    for (int layer : unique_layerstates){
+      value_layer[layer][variable]=0;
+      value_layer[layer+nSiPMLayers][variable]=0;
+    }
   }
   
   ibooker.setCurrentFolder("HGCAL/Layers/");
@@ -249,7 +267,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
 
   //define the layer-dqm plots average and cell
   // nLayers = 1;
-  for(int layer:layerstates){ // for each layer
+  for(int layer:unique_layerstates){ // for each layer
     std::ostringstream ss, st;
     ss << "_layer_" << layer;
     st << "Layer_" << layer;
@@ -266,22 +284,23 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     for (std::string variable:variables) {
       hexLayerModule_[layer][variable] = ibooker.book2DPoly("hex_"+variable+tag,  title + "; x[cm]; y[cm];"+SummaryLabel[variable], 13, 163.85, 2, 42);
     }
+    // Initialize all the layer-level counters
+    module_count[layer]=0;
+    module_count[layer+nSiPMLayers]=0;
+    iMod[layer] = 0;
+    iLayer[layer]=0;
   }
 
 
   //book the hex summary plots
   ibooker.setCurrentFolder("HGCAL/Modules");
 
-  std::map<int,uint32_t> iMod; //Per layer this is the index shift to plot correcly the hex plots
-  for (int layer : layerstates) {
-    iMod[layer] = 0;
-  }
-
   for(size_t i=0; i<typecodes.size(); i++) { // for each module
     
     std::string t = typecodes[i];
     char irot = irotstates[i];
     int layer = layerstates[i];
+    bool isSiPM = isSiPMstates[i];
     std::vector<double> x0y0 = x0y0states[i];
     
     double x0 = x0y0[0];
@@ -366,7 +385,6 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       unsigned chIdx = iobj - eRx*2; //from the channel index subtract the 2 CM channels per roc
 
       float nHits = num(SumIndices_t::NADC, chIdx, sum_me) + num(SumIndices_t::NTOT, chIdx, sum_me);
-      total_nHits_layer += nHits;
       value_module["occupancy"] += nHits;
       
       float avgcm = mean( SumIndices_t::SUMCM, SumIndices_t::NCM, chIdx, sum_me);
@@ -421,10 +439,10 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       hexLayerModule_[layer]["avgadc"]->addBin(grLayer);
       hexLayerModule_[layer]["avgadc"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,avgadc);
       
-      hexLayerModule_[layer]["n_dead_channels"]->addBin(grLayer);
+      hexLayerModule_[layer]["n_vacant_channels"]->addBin(grLayer);
       if (avgadc==0.){
-        value_module["n_dead_channels"] += 1;
-        hexLayerModule_[layer]["n_dead_channels"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,1);
+        value_module["n_vacant_channels"] += 1;
+        hexLayerModule_[layer]["n_vacant_channels"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,1);
       }
       hexLayerModule_[layer]["stdadc"]->addBin(grLayer);
       hexLayerModule_[layer]["stdadc"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,stdadc);
@@ -442,9 +460,15 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       hexLayerModule_[layer]["occupancy"]->setBinContent(iMod[layer]+chIdx-deltaIdx+1,occval);
       }
       iobj++;
-    }
+    } //end loop over template file keys
+   
+    //close template file
+    fgeo->Close();
+
+    //update the index shift
     iMod[layer] +=iobj-2*int(iobj/39)-deltaIdx;
 
+    // Number of channes in this module calculated from the typecode
     char value = t.c_str()[1];
     int n_cells;
     int n_CM_cells;
@@ -465,44 +489,30 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
    }
     
     for (std::string variable:variables){
-      if (!(variable == "occupancy" || variable =="n_dead_channels")){
+      if (!(variable == "occupancy" || variable =="n_vacant_channels")){
         value_module[variable] /= n_cells;
-      }else if (variable =="n_dead_channels")
+      }else if (variable =="n_vacant_channels")
       {
         value_module[variable] -= n_CM_cells;
       }
-        
-      
-      
-    }//end loop over template file keys
-    
-    //close template file
-    fgeo->Close();
-
-
-    for (std::string variable:variables){
-      Module_[variable]->setBinContent(i+1,value_module[variable]);
-      value_module[variable] = 0;
     }
 
     //fill layer information
-
-
-    if((i+1)%11==0) {
-        occupancyLayer_->setBinContent((i+1)/11, total_nHits_layer);
-        total_nHits_layer = 0.;
-        //iLayer++;
+    int layerId = layer + nSiPMLayers*int(isSiPM);
+    for (std::string variable:variables){
+      Module_[variable]->setBinContent(i+1,value_module[variable]);
+      value_layer[layerId][variable]+=value_module[variable];
+      value_module[variable] = 0;
     }
-  //std::cout << "********** typecode = " << typecodes[i].c_str() <<'\n';
+
+    module_count[layerId]++;
+    
   }//end loop over typecodes of this run
-  std::map<int,int> iLayer; //Per layer, index of the current Module bin in each layer as to plot correctly the average plot
-  for (int layer:layerstates){
-    iLayer[layer]=0;
-  }
+
   //register layer-level geometry & fill bin contents
   for (size_t i=0;i<typecodes.size();i++){ //for each module
     std::string t = typecodes[i];
-    //char irot = irotstates[i];
+    bool isSiPM = isSiPMstates[i];
     int layer = layerstates[i];
 
     TGraph* gr = binstates[i];
@@ -518,9 +528,17 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       //hexLayerAverage_[i][variable]->setBinLabel(layerModuleIdx+1,binlabel,1);
       hexLayerAverage_[layer][variable]->addBin(gr);
       hexLayerAverage_[layer][variable]->setBinContent(iLayer[layer]+1,value_module[variable]);
+
+      // I am doing this too many times, isntead of once per layer I'm doing once per module
+      unsigned int layerId = layer + nSiPMLayers*int(isSiPM);
+      if (module_count[layer]==0){
+        module_count[layer]=1;
+      }
+      Layer_[variable]->setBinContent(layerId,value_layer[layerId][variable]/module_count[layerId]);
     }
     iLayer[layer]++;
-  }
+  } // end of loop over modules
+
   edm::LogInfo("HGCalSysValDigisHarvester") << "Defined hex plots for " << typecodes.size();  
 }
 
