@@ -242,7 +242,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
   std::map<std::string,float> value_module;
   std::map<unsigned int,int> module_count;
   std::map<unsigned int,std::map<std::string,float>> value_layer;
-
+  
   std::map<int,uint32_t> iMod; //Per layer this is the index shift to plot correcly the channel-granularity plots
   std::map<int,int> iLayer; //Per layer, index of the current Module bin in each layer as to plot correctly the module-granularity plot
     
@@ -473,7 +473,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
     int n_cells;
     int n_CM_cells;
    
-   switch (value){
+    switch (value){
        case 'H':
        n_cells = 72*6;
        n_CM_cells = 12; //
@@ -486,7 +486,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
        n_cells = 1;
        n_CM_cells = 0;
        break;
-   }
+    }
     
     for (std::string variable:variables){
       if (!(variable == "occupancy" || variable =="n_vacant_channels")){
@@ -504,7 +504,7 @@ void HGCalSysValDigisHarvester::dqmDAQHexaPlots(DQMStore::IBooker &ibooker,
       value_layer[layerId][variable]+=value_module[variable];
       value_module[variable] = 0;
     }
-
+    
     module_count[layerId]++;
     
   }//end loop over typecodes of this run
