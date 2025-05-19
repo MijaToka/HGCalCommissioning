@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <math.h>
 #include <map>
 #include <set>
@@ -42,8 +43,6 @@
 #include <TPolyLine.h>
 #include <TTree.h>
 
-#include <fstream>
-#include <iostream>
 
 using namespace hgcal::dqm;
 
