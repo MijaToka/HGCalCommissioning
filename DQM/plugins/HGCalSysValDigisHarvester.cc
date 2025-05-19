@@ -564,7 +564,7 @@ void HGCalSysValDigisHarvester::dqmTriggerHexaPlots(DQMStore::IBooker &ibooker,
     }
   }
 
-  std::string geourl = templateDir_ + "/geometry_" + typecode + "_wafer.root";  
+  std::string geourl = templateDir_ + "/WaferMaps/geometry_" + typecode + "_wafer.root";  
   edm::FileInPath fip(geourl);
   TFile *fgeo = new TFile(fip.fullPath().c_str(), "R");
   
